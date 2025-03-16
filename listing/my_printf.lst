@@ -7,29 +7,46 @@
      7                                  section .text
      8                                  
      9                                  global _start                  ; predefined entry point name for ld
-    10                                  global _Z9my_printfPKcz
-    11                                  
-    12                                  _Z9my_printfPKcz:
-    13 00000000 55                              push rbp
-    14 00000001 4889E5                          mov rbp, rsp
-    15                                  
-    16 00000004 B801000000                      mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
-    17 00000009 BF01000000                      mov rdi, 1         ; stdout
-    18 0000000E 48BE-                           mov rsi, Msg
-    18 00000010 [0000000000000000] 
-    19 00000018 BA0C000000                      mov rdx, MsgLen    ; strlen (Msg)
-    20 0000001D 0F05                            syscall
-    21                                  
-    22                                          ; mov rax, 0x3C      ; exit64 (rdi)
-    23                                          ; xor rdi, rdi
-    24                                          ; syscall
-    25                                  
-    26 0000001F 4889EC                          mov rsp, rbp
-    27 00000022 5D                              pop rbp
-    28 00000023 C3                              ret
-    29                                  
-    30                                  section     .data
-    31                                  
-    32 00000000 48656C6C6F20576F72-     Msg:        db "Hello World", 0x0a
-    32 00000009 6C640A             
-    33                                  MsgLen      equ $ - Msg
+    10                                  ; global _Z9my_printfPKcz
+    11                                  global my_printf
+    12                                  
+    13                                  ; _Z9my_printfPKcz:
+    14                                  my_printf:
+    15 00000000 58                              pop  rax              ; save return address
+    16 00000001 4151                            push r9
+    17 00000003 4150                            push r8
+    18 00000005 51                              push rcx
+    19 00000006 52                              push rdx
+    20 00000007 56                              push rsi
+    21 00000008 57                              push rdi
+    22 00000009 50                              push rax              ; relocate ret address
+    23                                  
+    24 0000000A 55                              push rbp
+    25 0000000B 4889E5                          mov rbp, rsp
+    26                                  
+    27 0000000E B801000000                      mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+    28 00000013 BF01000000                      mov rdi, 1         ; stdout
+    29 00000018 48BE-                           mov rsi, Msg
+    29 0000001A [4000000000000000] 
+    30 00000022 BA0C000000                      mov rdx, MsgLen    ; strlen (Msg)
+    31 00000027 0F05                            syscall
+    32                                  
+    33                                          ; mov rax, 0x3C      ; exit64 (rdi)
+    34                                          ; xor rdi, rdi
+    35                                          ; syscall
+    36                                  
+    37 00000029 4889EC                          mov rsp, rbp
+    38 0000002C 5D                              pop rbp
+    39 0000002D 488B1C24                        mov rbx, [rsp]
+    40 00000031 4883C460                        add rsp, 6 * 16
+    41 00000035 FFE3                            jmp rbx
+    42                                  
+    43                                  flush_buf:
+    44                                  
+    45                                  section     .data
+    46                                  
+    47 00000000 <res 40h>               Buffer:     resb 64
+    47          ******************       warning: uninitialized space declared in non-BSS section `.data': zeroing [-w+zeroing]
+    48 00000040 48656C6C6F20576F72-     Msg:        db "Hello World", 0x0a
+    48 00000049 6C640A             
+    49                                  MsgLen      equ $ - Msg

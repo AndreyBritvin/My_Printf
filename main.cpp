@@ -1,11 +1,11 @@
 // #include <stdio.h>
 
-extern int my_printf(const char* fmt, ...);
+extern "C" int my_printf(const char* fmt, ...);
 
 int main()
 {
     int test_var = 12345;
-    my_printf("Oaoaoa");
+    my_printf("Oaoaoa", 'fa', 'st', 'c', 'a', 'll', 777, 888, 999);
 
     return 0;
 }
