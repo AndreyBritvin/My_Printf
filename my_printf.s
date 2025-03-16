@@ -10,15 +10,21 @@ global _start                  ; predefined entry point name for ld
 global _Z9my_printfPKcz
 
 _Z9my_printfPKcz:
+        push rbp
+        mov rbp, rsp
+
         mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1         ; stdout
         mov rsi, Msg
         mov rdx, MsgLen    ; strlen (Msg)
         syscall
 
-        mov rax, 0x3C      ; exit64 (rdi)
-        xor rdi, rdi
-        syscall
+        ; mov rax, 0x3C      ; exit64 (rdi)
+        ; xor rdi, rdi
+        ; syscall
+
+        mov rsp, rbp
+        pop rbp
         ret
 
 section     .data

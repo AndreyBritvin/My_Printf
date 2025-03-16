@@ -10,20 +10,26 @@
     10                                  global _Z9my_printfPKcz
     11                                  
     12                                  _Z9my_printfPKcz:
-    13 00000000 B801000000                      mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
-    14 00000005 BF01000000                      mov rdi, 1         ; stdout
-    15 0000000A 48BE-                           mov rsi, Msg
-    15 0000000C [0000000000000000] 
-    16 00000014 BA0A000000                      mov rdx, MsgLen    ; strlen (Msg)
-    17 00000019 0F05                            syscall
-    18                                  
-    19 0000001B B83C000000                      mov rax, 0x3C      ; exit64 (rdi)
-    20 00000020 4831FF                          xor rdi, rdi
-    21 00000023 0F05                            syscall
-    22 00000025 C3                              ret
-    23                                  
-    24                                  section     .data
+    13 00000000 55                              push rbp
+    14 00000001 4889E5                          mov rbp, rsp
+    15                                  
+    16 00000004 B801000000                      mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+    17 00000009 BF01000000                      mov rdi, 1         ; stdout
+    18 0000000E 48BE-                           mov rsi, Msg
+    18 00000010 [0000000000000000] 
+    19 00000018 BA0C000000                      mov rdx, MsgLen    ; strlen (Msg)
+    20 0000001D 0F05                            syscall
+    21                                  
+    22                                          ; mov rax, 0x3C      ; exit64 (rdi)
+    23                                          ; xor rdi, rdi
+    24                                          ; syscall
     25                                  
-    26 00000000 5F5F486C6C77726C64-     Msg:        db "__Hllwrld", 0x0a
-    26 00000009 0A                 
-    27                                  MsgLen      equ $ - Msg
+    26 0000001F 4889EC                          mov rsp, rbp
+    27 00000022 5D                              pop rbp
+    28 00000023 C3                              ret
+    29                                  
+    30                                  section     .data
+    31                                  
+    32 00000000 48656C6C6F20576F72-     Msg:        db "Hello World", 0x0a
+    32 00000009 6C640A             
+    33                                  MsgLen      equ $ - Msg
