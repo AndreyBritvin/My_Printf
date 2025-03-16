@@ -1,0 +1,29 @@
+     1                                  ;:================================================
+     2                                  ;: 0-Linux-nasm-64.s                   (c)Ded,2012
+     3                                  ;:================================================
+     4                                  
+     5                                  ; nasm -f elf64 -l 1-nasm.lst 1-nasm.s  ;  ld -s -o 1-nasm 1-nasm.o
+     6                                  
+     7                                  section .text
+     8                                  
+     9                                  global _start                  ; predefined entry point name for ld
+    10                                  global _Z9my_printfPKcz
+    11                                  
+    12                                  _Z9my_printfPKcz:
+    13 00000000 B801000000                      mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+    14 00000005 BF01000000                      mov rdi, 1         ; stdout
+    15 0000000A 48BE-                           mov rsi, Msg
+    15 0000000C [0000000000000000] 
+    16 00000014 BA0A000000                      mov rdx, MsgLen    ; strlen (Msg)
+    17 00000019 0F05                            syscall
+    18                                  
+    19 0000001B B83C000000                      mov rax, 0x3C      ; exit64 (rdi)
+    20 00000020 4831FF                          xor rdi, rdi
+    21 00000023 0F05                            syscall
+    22 00000025 C3                              ret
+    23                                  
+    24                                  section     .data
+    25                                  
+    26 00000000 5F5F486C6C77726C64-     Msg:        db "__Hllwrld", 0x0a
+    26 00000009 0A                 
+    27                                  MsgLen      equ $ - Msg
