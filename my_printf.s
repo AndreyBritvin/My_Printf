@@ -10,18 +10,24 @@ section .text
 %define FMT_ADR rbx
 %define SYMBOL  r14b
 %define CUR_ARG r13
-%define BUF_SIZE 64
+%define BUF_SIZE 128
 
 ;-------------------------------------------
 ; Writes to buffer from
 ;
 ; Destr: BUF_POS, FMT_ADR
 ;-------------------------------------------
-%macro WRITE_TO_BUFFER 0
+%macro WRITE_TO_BUFFER 1
         mov byte [Buffer + BUF_POS], SYMBOL
 
+        %if %1
         inc FMT_ADR
+        %endif
         inc BUF_POS
+        cmp BUF_POS, BUF_SIZE - 1
+        jne %%NO_FLUSH
+        FLUSH_BUF
+        %%NO_FLUSH
 %endmacro
 
 ;-------------------------------------------
@@ -33,8 +39,9 @@ section .text
         mov rax, 0x01           ; write64 (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1              ; stdout
         mov rsi, Buffer
-        mov rdx, 64             ; strlen (Msg)
+        mov rdx, BUF_SIZE             ; strlen (Msg)
         syscall
+        mov BUF_POS, 0
 %endmacro
 
 global _start                  ; predefined entry point name for ld
@@ -73,7 +80,7 @@ my_printf:
         cmp SYMBOL, 0
         je .end_of_parse
 
-        WRITE_TO_BUFFER                 ; common char
+        WRITE_TO_BUFFER 1                ; common char
 
         jmp .parse_char
 .is_percent:
@@ -109,7 +116,7 @@ my_printf:
         jmp .switch_end
 
 .dec_parse:
-        call parse_hex
+        call parse_dec
         jmp .switch_end
 
 .chr_parse:
@@ -117,14 +124,16 @@ my_printf:
         jmp .switch_end
 
 .perc_parse:
-        WRITE_TO_BUFFER
-        jmp .switch_end
+        WRITE_TO_BUFFER 1
+        jmp .parse_char
 
 .wrong_symbol:
+        mov r10, -1
         jmp .end_of_parse
 
 .switch_end:
         inc CUR_ARG
+        inc FMT_ADR
         jmp .parse_char
 
 .end_of_parse
@@ -133,20 +142,50 @@ my_printf:
         mov rsp, rbp
         pop rbp
         mov rbx, [rsp]
+        mov rax, r10            ; return value
         add rsp, 6 * 16         ; restore stack
         jmp rbx                 ; return
+;-------------------------------------------
 
+;-------------------------------------------
+; Put char in
+;
+; Destr: FMT_ADR, BUF_POS
+;-------------------------------------------
 parse_char:
         mov SYMBOL, [rbp + CUR_ARG * 8]
-        WRITE_TO_BUFFER
+        WRITE_TO_BUFFER 1
         ret
 
+;-------------------------------------------
+; Prints SYMBOL in hex mode, aka itoa
+; Destr: di
+;-------------------------------------------
 parse_hex:
-        mov SYMBOL, [rbp + CUR_ARG * 8]
-        mov byte [Buffer + BUF_POS], SYMBOL
-        inc BUF_POS
-        inc rbx
-        ret
+        mov r14, [rbp + CUR_ARG * 8]
+        mov r12, r14
+    push rax
+    push rcx
+    push rdx
+    ; mov bx, cs
+    mov rcx, 16                               ; in 16 bit register _4_ parts of 4 bits
+    .GET_DIGIT:
+    mov rdx, r12                         ; save in dx
+    and r12, 0xF0000000                ; mask first 4 bits
+    shr r12, 12 + 16 + 32                             ; delete zeros (bc little endian)
+    lea r11, [rel HEX_TO_ASCCI_ARR]
+    add r11, r12
+    mov al, byte [r11]  ; get ascii character
+    shl rdx, 4                               ; delete first 4 bits and replace new value
+    mov r12, rdx                              ; resave dx to bx
+    mov SYMBOL, al
+    WRITE_TO_BUFFER 0
+    loop .GET_DIGIT
+    pop rdx
+    pop rcx
+    pop rax
+    ret
+;-----------------------------------------
 
 parse_dec:
         mov SYMBOL, [rbp + CUR_ARG * 8]
@@ -163,4 +202,7 @@ parse_bin:
         ret
 
 section     .data
+
 Buffer:     resb BUF_SIZE
+HEX_TO_ASCCI_ARR:
+    db '0123456789ABCDEF'
