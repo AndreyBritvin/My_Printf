@@ -6,6 +6,11 @@
 
 section .text
 
+%define BUF_POS r15
+%define FMT_ADR rbx
+%define SYMBOL  r14b
+%define CUR_ARG r13
+
 %macro FLUSH_BUF 0
         mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1         ; stdout
@@ -32,27 +37,65 @@ my_printf:
         push rbp
         mov rbp, rsp
 
-        xor rbx, rbx
-        mov rbx, [rbp + 16]     ; fmt string
-        xor r15, r15            ; r15 - counter of buffer
+        xor FMT_ADR, FMT_ADR
+        mov FMT_ADR, [rbp + 16]     ; fmt string
+        xor BUF_POS, BUF_POS            ; r15 - counter of buffer
 
 .parse_char:
         xor r14, r14
-        mov r14b, [rbx]
-        cmp r14b, '%'
+        mov SYMBOL, [FMT_ADR]
+        cmp SYMBOL, '%'
         je .is_percent
-        cmp r14b, 0
+        cmp SYMBOL, 0
         je .end_of_parse
 
-        mov byte [Buffer + r15], r14b
+        mov byte [Buffer + BUF_POS], SYMBOL
 
-        inc rbx
-        inc r15
+        inc FMT_ADR
+        inc BUF_POS
 
         jmp .parse_char
 .is_percent:
+        inc rbx
+        mov SYMBOL, [rbx]
+        ; jump table
+        ; TODO: optimise by sub before cmp`s and then cmp only greater
+        cmp SYMBOL, 'b'
+        jb .wrong_symbol
+        cmp SYMBOL, 'x'
+        ja .wrong_symbol
+
+        sub SYMBOL, 'b'
+        mov rdi, r14
+        jmp [.jump_table + rdi * 8]
+
+.jump_table:               ; offset of functions for each of char
+        dq .bin_parse      ; b
+        dq .chr_parse      ; c
+        times ('x' - 'c' - 1) dq .wrong_symbol  ; not anyone
+        dq .hex_parse      ; x
+
+.bin_parse:
         ; parse
+        jmp .switch_end
+
+.chr_parse:
+        mov SYMBOL, [rbp + 32]
+        mov byte [Buffer + BUF_POS], SYMBOL
+        inc BUF_POS
+        inc bx
+        jmp .switch_end
+
+.hex_parse:
+        ; parse
+        jmp .switch_end
+
+.switch_end:
+
         jmp .parse_char
+
+.wrong_symbol:
+        jmp .end_of_parse
 
 .end_of_parse
         FLUSH_BUF
@@ -62,7 +105,6 @@ my_printf:
         mov rbx, [rsp]
         add rsp, 6 * 16         ; restore stack
         jmp rbx                 ; return
-
 
 
 flush_buf:

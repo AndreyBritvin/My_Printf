@@ -6,78 +6,122 @@
      6                                  
      7                                  section .text
      8                                  
-     9                                  %macro FLUSH_BUF 0
-    10                                          mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
-    11                                          mov rdi, 1         ; stdout
-    12                                          mov rsi, Buffer
-    13                                          mov rdx, 64    ; strlen (Msg)
-    14                                          syscall
-    15                                  %endmacro
-    16                                  
-    17                                  global _start                  ; predefined entry point name for ld
-    18                                  ; global _Z9my_printfPKcz
-    19                                  global my_printf
-    20                                  
-    21                                  ; _Z9my_printfPKcz:
-    22                                  my_printf:
-    23 00000000 58                              pop  rax              ; save return address
-    24 00000001 4151                            push r9
-    25 00000003 4150                            push r8
-    26 00000005 51                              push rcx
-    27 00000006 52                              push rdx
-    28 00000007 56                              push rsi
-    29 00000008 57                              push rdi
-    30 00000009 50                              push rax              ; relocate ret address
-    31                                  
-    32 0000000A 55                              push rbp
-    33 0000000B 4889E5                          mov rbp, rsp
-    34                                  
-    35 0000000E 4831DB                          xor rbx, rbx
-    36 00000011 488B5D10                        mov rbx, [rbp + 16]     ; fmt string
-    37 00000015 4D31FF                          xor r15, r15            ; r15 - counter of buffer
-    38                                  
-    39                                  .parse_char:
-    40 00000018 4D31F6                          xor r14, r14
-    41 0000001B 448A33                          mov r14b, [rbx]
-    42 0000001E 4180FE25                        cmp r14b, '%'
-    43 00000022 7415                            je .is_percent
-    44 00000024 4180FE00                        cmp r14b, 0
-    45 00000028 7411                            je .end_of_parse
-    46                                  
-    47 0000002A 4588B7[00000000]                mov byte [Buffer + r15], r14b
-    48                                  
-    49 00000031 48FFC3                          inc rbx
-    50 00000034 49FFC7                          inc r15
+     9                                  %define BUF_POS r15
+    10                                  %define FMT_ADR rbx
+    11                                  %define SYMBOL  r14b
+    12                                  %define CUR_ARG r13
+    13                                  
+    14                                  %macro FLUSH_BUF 0
+    15                                          mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+    16                                          mov rdi, 1         ; stdout
+    17                                          mov rsi, Buffer
+    18                                          mov rdx, 64    ; strlen (Msg)
+    19                                          syscall
+    20                                  %endmacro
+    21                                  
+    22                                  global _start                  ; predefined entry point name for ld
+    23                                  ; global _Z9my_printfPKcz
+    24                                  global my_printf
+    25                                  
+    26                                  ; _Z9my_printfPKcz:
+    27                                  my_printf:
+    28 00000000 58                              pop  rax              ; save return address
+    29 00000001 4151                            push r9
+    30 00000003 4150                            push r8
+    31 00000005 51                              push rcx
+    32 00000006 52                              push rdx
+    33 00000007 56                              push rsi
+    34 00000008 57                              push rdi
+    35 00000009 50                              push rax              ; relocate ret address
+    36                                  
+    37 0000000A 55                              push rbp
+    38 0000000B 4889E5                          mov rbp, rsp
+    39                                  
+    40 0000000E 4831DB                          xor FMT_ADR, FMT_ADR
+    41 00000011 488B5D10                        mov FMT_ADR, [rbp + 16]     ; fmt string
+    42 00000015 4D31FF                          xor BUF_POS, BUF_POS            ; r15 - counter of buffer
+    43                                  
+    44                                  .parse_char:
+    45 00000018 4D31F6                          xor r14, r14
+    46 0000001B 448A33                          mov SYMBOL, [FMT_ADR]
+    47 0000001E 4180FE25                        cmp SYMBOL, '%'
+    48 00000022 7419                            je .is_percent
+    49 00000024 4180FE00                        cmp SYMBOL, 0
+    50 00000028 0F840D010000                    je .end_of_parse
     51                                  
-    52 00000037 EBDF                            jmp .parse_char
-    53                                  .is_percent:
-    54                                          ; parse
-    55 00000039 EBDD                            jmp .parse_char
+    52 0000002E 4588B7[00000000]                mov byte [Buffer + BUF_POS], SYMBOL
+    53                                  
+    54 00000035 48FFC3                          inc FMT_ADR
+    55 00000038 49FFC7                          inc BUF_POS
     56                                  
-    57                                  .end_of_parse
-    57          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    58                                          FLUSH_BUF
-    10 0000003B B801000000          <1>  mov rax, 0x01
-    11 00000040 BF01000000          <1>  mov rdi, 1
-    12 00000045 48BE-               <1>  mov rsi, Buffer
-    12 00000047 [0000000000000000]  <1>
-    13 0000004F BA40000000          <1>  mov rdx, 64
-    14 00000054 0F05                <1>  syscall
-    59                                  
-    60 00000056 4889EC                          mov rsp, rbp
-    61 00000059 5D                              pop rbp
-    62 0000005A 488B1C24                        mov rbx, [rsp]
-    63 0000005E 4883C460                        add rsp, 6 * 16         ; restore stack
-    64 00000062 FFE3                            jmp rbx                 ; return
-    65                                  
-    66                                  
+    57 0000003B EBDB                            jmp .parse_char
+    58                                  .is_percent:
+    59 0000003D 48FFC3                          inc rbx
+    60 00000040 448A33                          mov SYMBOL, [rbx]
+    61                                          ; jump table
+    62                                          ; TODO: optimise by sub before cmp`s and then cmp only greater
+    63 00000043 4180FE62                        cmp SYMBOL, 'b'
+    64 00000047 0F82EC000000                    jb .wrong_symbol
+    65 0000004D 4180FE78                        cmp SYMBOL, 'x'
+    66 00000051 0F87E2000000                    ja .wrong_symbol
     67                                  
-    68                                  flush_buf:
-    69                                  
-    70                                  section     .data
-    71                                  
-    72 00000000 <res 40h>               Buffer:     resb 64
-    72          ******************       warning: uninitialized space declared in non-BSS section `.data': zeroing [-w+zeroing]
-    73 00000040 48656C6C6F20576F72-     Msg:        db "Hello World", 0x0a
-    73 00000049 6C640A             
-    74                                  MsgLen      equ $ - Msg
+    68 00000057 4180EE62                        sub SYMBOL, 'b'
+    69 0000005B 4C89F7                          mov rdi, r14
+    70                                          ; mov rcx,
+    71 0000005E FF24FD[65000000]                jmp [.jump_table + rdi * 8]
+    72                                  
+    73                                  .jump_table:               ; offset of functions for each of char
+    74 00000065 [1D01000000000000]              dq .bin_parse      ; b
+    75 0000006D [1F01000000000000]              dq .chr_parse      ; c
+    76 00000075 [3901000000000000]-             times ('x' - 'c' - 1) dq .wrong_symbol  ; not anyone
+    76 00000075 <rep 14h>          
+    77 00000115 [3201000000000000]              dq .hex_parse      ; x
+    78                                  
+    79                                  .bin_parse:
+    80                                          ; parse
+    81 0000011D EB15                            jmp .switch_end
+    82                                  
+    83                                  .chr_parse:
+    84 0000011F 448A7520                        mov SYMBOL, [rbp + 32]
+    85 00000123 4588B7[00000000]                mov byte [Buffer + BUF_POS], SYMBOL
+    86 0000012A 49FFC7                          inc BUF_POS
+    87 0000012D 66FFC3                          inc bx
+    88 00000130 EB02                            jmp .switch_end
+    89                                  
+    90                                  .hex_parse:
+    91                                          ; parse
+    92 00000132 EB00                            jmp .switch_end
+    93                                  
+    94                                  .switch_end:
+    95                                  
+    96 00000134 E9DFFEFFFF                      jmp .parse_char
+    97                                  
+    98                                  .wrong_symbol:
+    99 00000139 EB00                            jmp .end_of_parse
+   100                                  
+   101                                  .end_of_parse
+   101          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   102                                          FLUSH_BUF
+    15 0000013B B801000000          <1>  mov rax, 0x01
+    16 00000140 BF01000000          <1>  mov rdi, 1
+    17 00000145 48BE-               <1>  mov rsi, Buffer
+    17 00000147 [0000000000000000]  <1>
+    18 0000014F BA40000000          <1>  mov rdx, 64
+    19 00000154 0F05                <1>  syscall
+   103                                  
+   104 00000156 4889EC                          mov rsp, rbp
+   105 00000159 5D                              pop rbp
+   106 0000015A 488B1C24                        mov rbx, [rsp]
+   107 0000015E 4883C460                        add rsp, 6 * 16         ; restore stack
+   108 00000162 FFE3                            jmp rbx                 ; return
+   109                                  
+   110                                  
+   111                                  flush_buf:
+   112                                  
+   113                                  section     .data
+   114                                  
+   115 00000000 <res 40h>               Buffer:     resb 64
+   115          ******************       warning: uninitialized space declared in non-BSS section `.data': zeroing [-w+zeroing]
+   116 00000040 48656C6C6F20576F72-     Msg:        db "Hello World", 0x0a
+   116 00000049 6C640A             
+   117                                  MsgLen      equ $ - Msg
