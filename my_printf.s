@@ -6,6 +6,14 @@
 
 section .text
 
+%macro FLUSH_BUF 0
+        mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+        mov rdi, 1         ; stdout
+        mov rsi, Buffer
+        mov rdx, 64    ; strlen (Msg)
+        syscall
+%endmacro
+
 global _start                  ; predefined entry point name for ld
 ; global _Z9my_printfPKcz
 global my_printf
@@ -24,21 +32,38 @@ my_printf:
         push rbp
         mov rbp, rsp
 
-        mov rax, 0x01      ; write64 (rdi, rsi, rdx) ... r10, r8, r9
-        mov rdi, 1         ; stdout
-        mov rsi, Msg
-        mov rdx, MsgLen    ; strlen (Msg)
-        syscall
+        xor rbx, rbx
+        mov rbx, [rbp + 16]     ; fmt string
+        xor r15, r15            ; r15 - counter of buffer
 
-        ; mov rax, 0x3C      ; exit64 (rdi)
-        ; xor rdi, rdi
-        ; syscall
+.parse_char:
+        xor r14, r14
+        mov r14b, [rbx]
+        cmp r14b, '%'
+        je .is_percent
+        cmp r14b, 0
+        je .end_of_parse
+
+        mov byte [Buffer + r15], r14b
+
+        inc rbx
+        inc r15
+
+        jmp .parse_char
+.is_percent:
+        ; parse
+        jmp .parse_char
+
+.end_of_parse
+        FLUSH_BUF
 
         mov rsp, rbp
         pop rbp
         mov rbx, [rsp]
-        add rsp, 6 * 16
-        jmp rbx
+        add rsp, 6 * 16         ; restore stack
+        jmp rbx                 ; return
+
+
 
 flush_buf:
 
