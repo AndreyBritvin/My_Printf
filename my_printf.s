@@ -21,8 +21,14 @@ section .text
     push rax
     push rcx
     push rdx
+
     ; mov bx, cs
     shl r12, 32                                 ; because this support only 32bit ints
+
+    %if %1 == 8                                 ; because oct has N*3 parts, and 3 is very strange
+    shr r12, 1
+    %endif
+
     mov rcx, %4 / 2                                 ; in 16 bit register _4_ parts of 4 bits
     %%GET_DIGIT:
     mov rdx, r12                                ; save in dx
@@ -155,7 +161,7 @@ my_printf:
         jmp .switch_end
 
 .oct_parse:
-        WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 24   ; TODO: fix this
+        WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22   ; TODO: fix this
         jmp .switch_end
 
 .dec_parse:
