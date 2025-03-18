@@ -248,8 +248,14 @@ parse_string:
         jb .copy_to_buf
         FLUSH_BUF_COM               ; flush buf
         FLUSH_BUF r14, rcx
+        jmp .end
         .copy_to_buf
-
+        mov rdi, BUF_POS
+        mov rsi, r14
+        add rdi, Buffer
+        add BUF_POS, rcx
+        rep movsb
+        .end
         ret
 
 section     .bss

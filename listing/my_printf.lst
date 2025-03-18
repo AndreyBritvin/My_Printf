@@ -507,7 +507,7 @@
    104                              <1>  %%done
    104          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
    247 000003C4 4881F980000000                  cmp rcx, BUF_SIZE * 2
-   248 000003CB 7241                            jb .copy_to_buf
+   248 000003CB 7243                            jb .copy_to_buf
    249                                          FLUSH_BUF_COM               ; flush buf
     58 000003CD 52                  <1>  push rdx
     59 000003CE 51                  <1>  push rcx
@@ -533,17 +533,24 @@
     66 00000406 41BF00000000        <1>  mov BUF_POS, 0
     67 0000040C 59                  <1>  pop rcx
     68 0000040D 5A                  <1>  pop rdx
-   251                                          .copy_to_buf
-   251          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
-   252                                  
-   253 0000040E C3                              ret
-   254                                  
-   255                                  section     .bss
-   256                                  
-   257 00000000 <res 40h>               Buffer:     resb BUF_SIZE
-   258                                  
-   259                                  section     .data
+   251 0000040E EB12                            jmp .end
+   252                                          .copy_to_buf
+   252          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   253 00000410 4C89FF                          mov rdi, BUF_POS
+   254 00000413 4C89F6                          mov rsi, r14
+   255 00000416 4881C7[00000000]                add rdi, Buffer
+   256 0000041D 4901CF                          add BUF_POS, rcx
+   257 00000420 F3A4                            rep movsb
+   258                                          .end
+   258          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   259 00000422 C3                              ret
    260                                  
-   261                                  HEX_TO_ASCCI_ARR:
-   262 00000000 303132333435363738-         db '0123456789ABCDEF'
-   262 00000009 39414243444546     
+   261                                  section     .bss
+   262                                  
+   263 00000000 <res 40h>               Buffer:     resb BUF_SIZE
+   264                                  
+   265                                  section     .data
+   266                                  
+   267                                  HEX_TO_ASCCI_ARR:
+   268 00000000 303132333435363738-         db '0123456789ABCDEF'
+   268 00000009 39414243444546     
