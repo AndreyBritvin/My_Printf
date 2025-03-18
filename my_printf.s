@@ -5,6 +5,7 @@ section .text
 %define SYMBOL  r14b
 %define CUR_ARG r13
 %define BUF_SIZE 64
+%define FLUSH_BUF_COM FLUSH_BUF Buffer, BUF_SIZE
 
 ;-------------------------------------------
 ; Writes to buffer from SYMBOL (full register)
@@ -49,16 +50,18 @@ section .text
 
 ;-------------------------------------------
 ; Flushes buffer from buffer
-;
+; Args: %1 - addr to print
+;       %2 - strlen(%1)
 ; Destr: rax, rdi, rsi
 ;-------------------------------------------
-%macro FLUSH_BUF 0
+%macro FLUSH_BUF 2
         push rdx
         push rcx
         mov rax, 0x01           ; write64 (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1              ; stdout
-        mov rsi, Buffer
-        mov rdx, BUF_SIZE             ; strlen (Msg)
+        mov rsi, %1
+        ; mov rsi, Buffer
+        mov rdx, %2             ; strlen (Msg)
         syscall
         mov BUF_POS, 0
         pop rcx
@@ -80,11 +83,28 @@ section .text
         inc BUF_POS
         cmp BUF_POS, BUF_SIZE - 1
         jne %%NO_FLUSH
-        FLUSH_BUF
+        FLUSH_BUF_COM
         %%NO_FLUSH
 
 %endmacro
 ;-------------------------------------------
+
+;-------------------------------------------
+; Destr: rcx, rdi
+; Ret: rcx - strlen(rdi)
+;-------------------------------------------
+%macro my_strlen 0
+        xor rcx, rcx                ; rcx = 0 (счётчик символов)
+%%loop:
+        cmp byte [rdi], 0           ; Проверяем символ на '\0'
+        je %%done                    ; Если нулевой терминатор, выходим
+        inc rdi                     ; Сдвигаем указатель на следующий символ
+        inc rcx                     ; Увеличиваем счётчик
+        jmp %%loop                  ; Повторяем цикл
+        %%done
+%endmacro
+;-------------------------------------------
+
 
 global _start                  ; predefined entry point name for ld
 ; global _Z9my_printfPKcz
@@ -149,7 +169,9 @@ my_printf:
         dq .dec_parse      ; d - dec
         times ('o' - 'd' - 1) dq .wrong_symbol  ; not anyone
         dq .oct_parse      ; o - oct
-        times ('x' - 'o' - 1) dq .wrong_symbol  ; not anyone
+        times ('s' - 'o' - 1) dq .wrong_symbol  ; not anyone
+        dq .str_parse      ; s - str
+        times ('x' - 's' - 1) dq .wrong_symbol  ; not anyone
         dq .hex_parse      ; x - hex
 
 .bin_parse:
@@ -161,7 +183,11 @@ my_printf:
         jmp .switch_end
 
 .oct_parse:
-        WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22   ; TODO: fix this
+        WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22
+        jmp .switch_end
+
+.str_parse:
+        call parse_string
         jmp .switch_end
 
 .dec_parse:
@@ -186,7 +212,7 @@ my_printf:
         jmp .parse_char
 
 .end_of_parse
-        FLUSH_BUF
+        FLUSH_BUF_COM
 
         mov rsp, rbp
         pop rbp
@@ -212,6 +238,18 @@ parse_dec:
         mov byte [Buffer + BUF_POS], SYMBOL
         inc BUF_POS
         inc rbx
+        ret
+
+parse_string:
+        mov r14, [rbp + CUR_ARG * 8]    ; save in r14 addr of string
+        mov rdi, r14
+        my_strlen
+        cmp rcx, BUF_SIZE * 2
+        jb .copy_to_buf
+        FLUSH_BUF_COM               ; flush buf
+        FLUSH_BUF r14, rcx
+        .copy_to_buf
+
         ret
 
 section     .bss

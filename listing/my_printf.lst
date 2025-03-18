@@ -5,466 +5,545 @@
      5                                  %define SYMBOL  r14b
      6                                  %define CUR_ARG r13
      7                                  %define BUF_SIZE 64
-     8                                  
-     9                                  ;-------------------------------------------
-    10                                  ; Writes to buffer from SYMBOL (full register)
-    11                                  ; Args: %1 - base, 2/8/10/16
-    12                                  ;       %2 - mask           for hex/oct/bin
-    13                                  ;       %3 - shifting       for hex/oct/bin
-    14                                  ;       %4 - repeating part for hex/oct/bin
-    15                                  ;
-    16                                  ; Destr: BUF_POS, FMT_ADR
-    17                                  ;-------------------------------------------
-    18                                  %macro WRITE_NUM_TO_BUF 4
-    19                                          mov r14, [rbp + CUR_ARG * 8]
-    20                                          mov r12, r14
-    21                                      push rax
-    22                                      push rcx
-    23                                      push rdx
-    24                                  
-    25                                      ; mov bx, cs
-    26                                      shl r12, 32                                 ; because this support only 32bit ints
-    27                                  
-    28                                      %if %1 == 8                                 ; because oct has N*3 parts, and 3 is very strange
-    29                                      shr r12, 1
-    30                                      %endif
-    31                                  
-    32                                      mov rcx, %4 / 2                                 ; in 16 bit register _4_ parts of 4 bits
-    33                                      %%GET_DIGIT:
-    34                                      mov rdx, r12                                ; save in dx
-    35                                      and r12, %2                                 ; mask first 4 bits
-    36                                      shr r12, 64 - %3                            ; delete zeros (bc little endian)
-    37                                      lea r11, [rel HEX_TO_ASCCI_ARR]
-    38                                      add r11, r12
-    39                                      mov al, byte [r11]                          ; get ascii character
-    40                                      shl rdx, %3                                 ; delete first 4 bits and replace new value
-    41                                      mov r12, rdx                                ; resave dx to bx
-    42                                      mov SYMBOL, al
-    43                                      WRITE_TO_BUFFER 0
-    44                                      loop %%GET_DIGIT
-    45                                      pop rdx
-    46                                      pop rcx
-    47                                      pop rax
-    48                                  %endmacro
-    49                                  
-    50                                  ;-------------------------------------------
-    51                                  ; Flushes buffer from buffer
-    52                                  ;
-    53                                  ; Destr: rax, rdi, rsi
-    54                                  ;-------------------------------------------
-    55                                  %macro FLUSH_BUF 0
-    56                                          push rdx
-    57                                          push rcx
-    58                                          mov rax, 0x01           ; write64 (rdi, rsi, rdx) ... r10, r8, r9
-    59                                          mov rdi, 1              ; stdout
-    60                                          mov rsi, Buffer
-    61                                          mov rdx, BUF_SIZE             ; strlen (Msg)
-    62                                          syscall
-    63                                          mov BUF_POS, 0
-    64                                          pop rcx
-    65                                          pop rdx
-    66                                  %endmacro
-    67                                  
-    68                                  ;-------------------------------------------
-    69                                  ; Writes to buffer from SYMBOL
-    70                                  ; Args: %1 - 1 = inc FMT_ADR, else 0
-    71                                  ;
-    72                                  ; Destr: BUF_POS, FMT_ADR
-    73                                  ;-------------------------------------------
-    74                                  %macro WRITE_TO_BUFFER 1
-    75                                          mov byte [Buffer + BUF_POS], SYMBOL
-    76                                  
-    77                                          %if %1
-    78                                          inc FMT_ADR
-    79                                          %endif
-    80                                          inc BUF_POS
-    81                                          cmp BUF_POS, BUF_SIZE - 1
-    82                                          jne %%NO_FLUSH
-    83                                          FLUSH_BUF
-    84                                          %%NO_FLUSH
-    85                                  
-    86                                  %endmacro
-    87                                  ;-------------------------------------------
+     8                                  %define FLUSH_BUF_COM FLUSH_BUF Buffer, BUF_SIZE
+     9                                  
+    10                                  ;-------------------------------------------
+    11                                  ; Writes to buffer from SYMBOL (full register)
+    12                                  ; Args: %1 - base, 2/8/10/16
+    13                                  ;       %2 - mask           for hex/oct/bin
+    14                                  ;       %3 - shifting       for hex/oct/bin
+    15                                  ;       %4 - repeating part for hex/oct/bin
+    16                                  ;
+    17                                  ; Destr: BUF_POS, FMT_ADR
+    18                                  ;-------------------------------------------
+    19                                  %macro WRITE_NUM_TO_BUF 4
+    20                                          mov r14, [rbp + CUR_ARG * 8]
+    21                                          mov r12, r14
+    22                                      push rax
+    23                                      push rcx
+    24                                      push rdx
+    25                                  
+    26                                      ; mov bx, cs
+    27                                      shl r12, 32                                 ; because this support only 32bit ints
+    28                                  
+    29                                      %if %1 == 8                                 ; because oct has N*3 parts, and 3 is very strange
+    30                                      shr r12, 1
+    31                                      %endif
+    32                                  
+    33                                      mov rcx, %4 / 2                                 ; in 16 bit register _4_ parts of 4 bits
+    34                                      %%GET_DIGIT:
+    35                                      mov rdx, r12                                ; save in dx
+    36                                      and r12, %2                                 ; mask first 4 bits
+    37                                      shr r12, 64 - %3                            ; delete zeros (bc little endian)
+    38                                      lea r11, [rel HEX_TO_ASCCI_ARR]
+    39                                      add r11, r12
+    40                                      mov al, byte [r11]                          ; get ascii character
+    41                                      shl rdx, %3                                 ; delete first 4 bits and replace new value
+    42                                      mov r12, rdx                                ; resave dx to bx
+    43                                      mov SYMBOL, al
+    44                                      WRITE_TO_BUFFER 0
+    45                                      loop %%GET_DIGIT
+    46                                      pop rdx
+    47                                      pop rcx
+    48                                      pop rax
+    49                                  %endmacro
+    50                                  
+    51                                  ;-------------------------------------------
+    52                                  ; Flushes buffer from buffer
+    53                                  ; Args: %1 - addr to print
+    54                                  ;       %2 - strlen(%1)
+    55                                  ; Destr: rax, rdi, rsi
+    56                                  ;-------------------------------------------
+    57                                  %macro FLUSH_BUF 2
+    58                                          push rdx
+    59                                          push rcx
+    60                                          mov rax, 0x01           ; write64 (rdi, rsi, rdx) ... r10, r8, r9
+    61                                          mov rdi, 1              ; stdout
+    62                                          mov rsi, %1
+    63                                          ; mov rsi, Buffer
+    64                                          mov rdx, %2             ; strlen (Msg)
+    65                                          syscall
+    66                                          mov BUF_POS, 0
+    67                                          pop rcx
+    68                                          pop rdx
+    69                                  %endmacro
+    70                                  
+    71                                  ;-------------------------------------------
+    72                                  ; Writes to buffer from SYMBOL
+    73                                  ; Args: %1 - 1 = inc FMT_ADR, else 0
+    74                                  ;
+    75                                  ; Destr: BUF_POS, FMT_ADR
+    76                                  ;-------------------------------------------
+    77                                  %macro WRITE_TO_BUFFER 1
+    78                                          mov byte [Buffer + BUF_POS], SYMBOL
+    79                                  
+    80                                          %if %1
+    81                                          inc FMT_ADR
+    82                                          %endif
+    83                                          inc BUF_POS
+    84                                          cmp BUF_POS, BUF_SIZE - 1
+    85                                          jne %%NO_FLUSH
+    86                                          FLUSH_BUF_COM
+    87                                          %%NO_FLUSH
     88                                  
-    89                                  global _start                  ; predefined entry point name for ld
-    90                                  ; global _Z9my_printfPKcz
-    91                                  global my_printf
-    92                                  
-    93                                  
-    94                                  ;-------------------------------------------
-    95                                  ; My printf. Arguments by fastcall, fmt in rdi (first)
-    96                                  ;
-    97                                  ; Destr: many things...
-    98                                  ;-------------------------------------------
-    99                                  ; _Z9my_printfPKcz:
-   100                                  my_printf:
-   101 00000000 58                              pop  rax              ; save return address
-   102 00000001 4151                            push r9
-   103 00000003 4150                            push r8
-   104 00000005 51                              push rcx
-   105 00000006 52                              push rdx
-   106 00000007 56                              push rsi
-   107 00000008 57                              push rdi
-   108 00000009 50                              push rax              ; relocate ret address
-   109                                  
-   110 0000000A 55                              push rbp
-   111 0000000B 4889E5                          mov rbp, rsp
+    89                                  %endmacro
+    90                                  ;-------------------------------------------
+    91                                  
+    92                                  ;-------------------------------------------
+    93                                  ; Destr: rcx, rdi
+    94                                  ; Ret: rcx - strlen(rdi)
+    95                                  ;-------------------------------------------
+    96                                  %macro my_strlen 0
+    97                                          xor rcx, rcx                ; rcx = 0 (счётчик символов)
+    98                                  %%loop:
+    99                                          cmp byte [rdi], 0           ; Проверяем символ на '\0'
+   100                                          je %%done                    ; Если нулевой терминатор, выходим
+   101                                          inc rdi                     ; Сдвигаем указатель на следующий символ
+   102                                          inc rcx                     ; Увеличиваем счётчик
+   103                                          jmp %%loop                  ; Повторяем цикл
+   104                                          %%done
+   105                                  %endmacro
+   106                                  ;-------------------------------------------
+   107                                  
+   108                                  
+   109                                  global _start                  ; predefined entry point name for ld
+   110                                  ; global _Z9my_printfPKcz
+   111                                  global my_printf
    112                                  
-   113 0000000E 4831DB                          xor FMT_ADR, FMT_ADR
-   114 00000011 488B5D10                        mov FMT_ADR, [rbp + 16]         ; fmt string
-   115 00000015 4D31FF                          xor BUF_POS, BUF_POS            ; r15 - counter of buffer
-   116 00000018 41BD03000000                    mov CUR_ARG, 3
-   117                                  
-   118                                  .parse_char:
-   119 0000001E 4D31F6                          xor r14, r14
-   120 00000021 448A33                          mov SYMBOL, [FMT_ADR]
-   121 00000024 4180FE25                        cmp SYMBOL, '%'
-   122 00000028 7444                            je .is_percent
-   123 0000002A 4180FE00                        cmp SYMBOL, 0
-   124 0000002E 0F84EA020000                    je .end_of_parse
-   125                                  
-   126                                          WRITE_TO_BUFFER 1                ; common char
-    75 00000034 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <1> 
-    77                              <1>  %if %1
-    78 0000003B 48FFC3              <1>  inc FMT_ADR
-    79                              <1>  %endif
-    80 0000003E 49FFC7              <1>  inc BUF_POS
-    81 00000041 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
-    82 00000045 7525                <1>  jne %%NO_FLUSH
-    83                              <1>  FLUSH_BUF
-    56 00000047 52                  <2>  push rdx
-    57 00000048 51                  <2>  push rcx
-    58 00000049 B801000000          <2>  mov rax, 0x01
-    59 0000004E BF01000000          <2>  mov rdi, 1
-    60 00000053 48BE-               <2>  mov rsi, Buffer
-    60 00000055 [0000000000000000]  <2>
-    61 0000005D BA40000000          <2>  mov rdx, BUF_SIZE
-    62 00000062 0F05                <2>  syscall
-    63 00000064 41BF00000000        <2>  mov BUF_POS, 0
-    64 0000006A 59                  <2>  pop rcx
-    65 0000006B 5A                  <2>  pop rdx
-    84                              <1>  %%NO_FLUSH
-    84          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <1> 
-   127                                  
-   128 0000006C EBB0                            jmp .parse_char
-   129                                  .is_percent:
-   130 0000006E 48FFC3                          inc rbx
-   131 00000071 448A33                          mov SYMBOL, [rbx]
+   113                                  
+   114                                  ;-------------------------------------------
+   115                                  ; My printf. Arguments by fastcall, fmt in rdi (first)
+   116                                  ;
+   117                                  ; Destr: many things...
+   118                                  ;-------------------------------------------
+   119                                  ; _Z9my_printfPKcz:
+   120                                  my_printf:
+   121 00000000 58                              pop  rax              ; save return address
+   122 00000001 4151                            push r9
+   123 00000003 4150                            push r8
+   124 00000005 51                              push rcx
+   125 00000006 52                              push rdx
+   126 00000007 56                              push rsi
+   127 00000008 57                              push rdi
+   128 00000009 50                              push rax              ; relocate ret address
+   129                                  
+   130 0000000A 55                              push rbp
+   131 0000000B 4889E5                          mov rbp, rsp
    132                                  
-   133 00000074 4180FE25                        cmp SYMBOL, '%'
-   134 00000078 0F844F020000                    je .perc_parse
-   135                                          ; jump table
-   136                                          ; TODO: optimise by sub before cmp`s and then cmp only greater
-   137 0000007E 4180FE62                        cmp SYMBOL, 'b'
-   138 00000082 0F8282020000                    jb .wrong_symbol
-   139 00000088 4180FE78                        cmp SYMBOL, 'x'
-   140 0000008C 0F8778020000                    ja .wrong_symbol
-   141                                  
-   142 00000092 4180EE62                        sub SYMBOL, 'b'
-   143 00000096 4C89F7                          mov rdi, r14
-   144 00000099 FF24FD[A0000000]                jmp [.jump_table + rdi * 8]
+   133 0000000E 4831DB                          xor FMT_ADR, FMT_ADR
+   134 00000011 488B5D10                        mov FMT_ADR, [rbp + 16]         ; fmt string
+   135 00000015 4D31FF                          xor BUF_POS, BUF_POS            ; r15 - counter of buffer
+   136 00000018 41BD03000000                    mov CUR_ARG, 3
+   137                                  
+   138                                  .parse_char:
+   139 0000001E 4D31F6                          xor r14, r14
+   140 00000021 448A33                          mov SYMBOL, [FMT_ADR]
+   141 00000024 4180FE25                        cmp SYMBOL, '%'
+   142 00000028 7444                            je .is_percent
+   143 0000002A 4180FE00                        cmp SYMBOL, 0
+   144 0000002E 0F84F1020000                    je .end_of_parse
    145                                  
-   146                                  .jump_table:               ; offset of functions for each of char
-   147 000000A0 [5801000000000000]              dq .bin_parse      ; b - bin
-   148 000000A8 [C602000000000000]              dq .chr_parse      ; c - char
-   149 000000B0 [BF02000000000000]              dq .dec_parse      ; d - dec
-   150 000000B8 [0A03000000000000]-             times ('o' - 'd' - 1) dq .wrong_symbol  ; not anyone
-   150 000000B8 <rep Ah>           
-   151 00000108 [4702000000000000]              dq .oct_parse      ; o - oct
-   152 00000110 [0A03000000000000]-             times ('x' - 'o' - 1) dq .wrong_symbol  ; not anyone
-   152 00000110 <rep 8h>           
-   153 00000150 [CF01000000000000]              dq .hex_parse      ; x - hex
-   154                                  
-   155                                  .bin_parse:
-   156                                          WRITE_NUM_TO_BUF 2, 0x80000000, 1, 64
-    19 00000158 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
-    20 0000015D 4D89F4              <1>  mov r12, r14
-    21 00000160 50                  <1>  push rax
-    22 00000161 51                  <1>  push rcx
-    23 00000162 52                  <1>  push rdx
-    24                              <1> 
+   146                                          WRITE_TO_BUFFER 1                ; common char
+    78 00000034 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <1> 
+    80                              <1>  %if %1
+    81 0000003B 48FFC3              <1>  inc FMT_ADR
+    82                              <1>  %endif
+    83 0000003E 49FFC7              <1>  inc BUF_POS
+    84 00000041 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
+    85 00000045 7525                <1>  jne %%NO_FLUSH
+    86                              <1>  FLUSH_BUF_COM
+    58 00000047 52                  <2>  push rdx
+    59 00000048 51                  <2>  push rcx
+    60 00000049 B801000000          <2>  mov rax, 0x01
+    61 0000004E BF01000000          <2>  mov rdi, 1
+    62 00000053 48BE-               <2>  mov rsi, %1
+    62 00000055 [0000000000000000]  <2>
+    63                              <2> 
+    64 0000005D BA40000000          <2>  mov rdx, %2
+    65 00000062 0F05                <2>  syscall
+    66 00000064 41BF00000000        <2>  mov BUF_POS, 0
+    67 0000006A 59                  <2>  pop rcx
+    68 0000006B 5A                  <2>  pop rdx
+    87                              <1>  %%NO_FLUSH
+    87          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <1> 
+   147                                  
+   148 0000006C EBB0                            jmp .parse_char
+   149                                  .is_percent:
+   150 0000006E 48FFC3                          inc rbx
+   151 00000071 448A33                          mov SYMBOL, [rbx]
+   152                                  
+   153 00000074 4180FE25                        cmp SYMBOL, '%'
+   154 00000078 0F8456020000                    je .perc_parse
+   155                                          ; jump table
+   156                                          ; TODO: optimise by sub before cmp`s and then cmp only greater
+   157 0000007E 4180FE62                        cmp SYMBOL, 'b'
+   158 00000082 0F8289020000                    jb .wrong_symbol
+   159 00000088 4180FE78                        cmp SYMBOL, 'x'
+   160 0000008C 0F877F020000                    ja .wrong_symbol
+   161                                  
+   162 00000092 4180EE62                        sub SYMBOL, 'b'
+   163 00000096 4C89F7                          mov rdi, r14
+   164 00000099 FF24FD[A0000000]                jmp [.jump_table + rdi * 8]
+   165                                  
+   166                                  .jump_table:               ; offset of functions for each of char
+   167 000000A0 [5801000000000000]              dq .bin_parse      ; b - bin
+   168 000000A8 [CD02000000000000]              dq .chr_parse      ; c - char
+   169 000000B0 [C602000000000000]              dq .dec_parse      ; d - dec
+   170 000000B8 [1103000000000000]-             times ('o' - 'd' - 1) dq .wrong_symbol  ; not anyone
+   170 000000B8 <rep Ah>           
+   171 00000108 [4702000000000000]              dq .oct_parse      ; o - oct
+   172 00000110 [1103000000000000]-             times ('s' - 'o' - 1) dq .wrong_symbol  ; not anyone
+   172 00000110 <rep 3h>           
+   173 00000128 [BF02000000000000]              dq .str_parse      ; s - str
+   174 00000130 [1103000000000000]-             times ('x' - 's' - 1) dq .wrong_symbol  ; not anyone
+   174 00000130 <rep 4h>           
+   175 00000150 [CF01000000000000]              dq .hex_parse      ; x - hex
+   176                                  
+   177                                  .bin_parse:
+   178                                          WRITE_NUM_TO_BUF 2, 0x80000000, 1, 64
+    20 00000158 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
+    21 0000015D 4D89F4              <1>  mov r12, r14
+    22 00000160 50                  <1>  push rax
+    23 00000161 51                  <1>  push rcx
+    24 00000162 52                  <1>  push rdx
     25                              <1> 
-    26 00000163 49C1E420            <1>  shl r12, 32
-    27                              <1> 
-    28                              <1>  %if %1 == 8
-    29                              <1>  shr r12, 1
-    30                              <1>  %endif
-    31                              <1> 
-    32 00000167 B920000000          <1>  mov rcx, %4 / 2
-    33                              <1>  %%GET_DIGIT:
-    34 0000016C 4C89E2              <1>  mov rdx, r12
-    35 0000016F 4981E400000080      <1>  and r12, %2
-    35          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
-    35          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
-    36 00000176 49C1EC3F            <1>  shr r12, 64 - %3
-    37 0000017A 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
-    38 00000181 4D01E3              <1>  add r11, r12
-    39 00000184 418A03              <1>  mov al, byte [r11]
-    40 00000187 48D1E2              <1>  shl rdx, %3
-    41 0000018A 4989D4              <1>  mov r12, rdx
-    42 0000018D 4188C6              <1>  mov SYMBOL, al
-    43                              <1>  WRITE_TO_BUFFER 0
-    75 00000190 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <2> 
-    77                              <2>  %if %1
-    78                              <2>  inc FMT_ADR
-    79                              <2>  %endif
-    80 00000197 49FFC7              <2>  inc BUF_POS
-    81 0000019A 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
-    82 0000019E 7525                <2>  jne %%NO_FLUSH
-    83                              <2>  FLUSH_BUF
-    56 000001A0 52                  <3>  push rdx
-    57 000001A1 51                  <3>  push rcx
-    58 000001A2 B801000000          <3>  mov rax, 0x01
-    59 000001A7 BF01000000          <3>  mov rdi, 1
-    60 000001AC 48BE-               <3>  mov rsi, Buffer
-    60 000001AE [0000000000000000]  <3>
-    61 000001B6 BA40000000          <3>  mov rdx, BUF_SIZE
-    62 000001BB 0F05                <3>  syscall
-    63 000001BD 41BF00000000        <3>  mov BUF_POS, 0
-    64 000001C3 59                  <3>  pop rcx
-    65 000001C4 5A                  <3>  pop rdx
-    84                              <2>  %%NO_FLUSH
-    84          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <2> 
-    44 000001C5 E2A5                <1>  loop %%GET_DIGIT
-    45 000001C7 5A                  <1>  pop rdx
-    46 000001C8 59                  <1>  pop rcx
-    47 000001C9 58                  <1>  pop rax
-   157 000001CA E944010000                      jmp .switch_end
-   158                                  
-   159                                  .hex_parse:
-   160                                          WRITE_NUM_TO_BUF 16, 0xF0000000, 4, 16
-    19 000001CF 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
-    20 000001D4 4D89F4              <1>  mov r12, r14
-    21 000001D7 50                  <1>  push rax
-    22 000001D8 51                  <1>  push rcx
-    23 000001D9 52                  <1>  push rdx
-    24                              <1> 
+    26                              <1> 
+    27 00000163 49C1E420            <1>  shl r12, 32
+    28                              <1> 
+    29                              <1>  %if %1 == 8
+    30                              <1>  shr r12, 1
+    31                              <1>  %endif
+    32                              <1> 
+    33 00000167 B920000000          <1>  mov rcx, %4 / 2
+    34                              <1>  %%GET_DIGIT:
+    35 0000016C 4C89E2              <1>  mov rdx, r12
+    36 0000016F 4981E400000080      <1>  and r12, %2
+    36          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
+    36          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
+    37 00000176 49C1EC3F            <1>  shr r12, 64 - %3
+    38 0000017A 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
+    39 00000181 4D01E3              <1>  add r11, r12
+    40 00000184 418A03              <1>  mov al, byte [r11]
+    41 00000187 48D1E2              <1>  shl rdx, %3
+    42 0000018A 4989D4              <1>  mov r12, rdx
+    43 0000018D 4188C6              <1>  mov SYMBOL, al
+    44                              <1>  WRITE_TO_BUFFER 0
+    78 00000190 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <2> 
+    80                              <2>  %if %1
+    81                              <2>  inc FMT_ADR
+    82                              <2>  %endif
+    83 00000197 49FFC7              <2>  inc BUF_POS
+    84 0000019A 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
+    85 0000019E 7525                <2>  jne %%NO_FLUSH
+    86                              <2>  FLUSH_BUF_COM
+    58 000001A0 52                  <3>  push rdx
+    59 000001A1 51                  <3>  push rcx
+    60 000001A2 B801000000          <3>  mov rax, 0x01
+    61 000001A7 BF01000000          <3>  mov rdi, 1
+    62 000001AC 48BE-               <3>  mov rsi, %1
+    62 000001AE [0000000000000000]  <3>
+    63                              <3> 
+    64 000001B6 BA40000000          <3>  mov rdx, %2
+    65 000001BB 0F05                <3>  syscall
+    66 000001BD 41BF00000000        <3>  mov BUF_POS, 0
+    67 000001C3 59                  <3>  pop rcx
+    68 000001C4 5A                  <3>  pop rdx
+    87                              <2>  %%NO_FLUSH
+    87          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <2> 
+    45 000001C5 E2A5                <1>  loop %%GET_DIGIT
+    46 000001C7 5A                  <1>  pop rdx
+    47 000001C8 59                  <1>  pop rcx
+    48 000001C9 58                  <1>  pop rax
+   179 000001CA E94B010000                      jmp .switch_end
+   180                                  
+   181                                  .hex_parse:
+   182                                          WRITE_NUM_TO_BUF 16, 0xF0000000, 4, 16
+    20 000001CF 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
+    21 000001D4 4D89F4              <1>  mov r12, r14
+    22 000001D7 50                  <1>  push rax
+    23 000001D8 51                  <1>  push rcx
+    24 000001D9 52                  <1>  push rdx
     25                              <1> 
-    26 000001DA 49C1E420            <1>  shl r12, 32
-    27                              <1> 
-    28                              <1>  %if %1 == 8
-    29                              <1>  shr r12, 1
-    30                              <1>  %endif
-    31                              <1> 
-    32 000001DE B908000000          <1>  mov rcx, %4 / 2
-    33                              <1>  %%GET_DIGIT:
-    34 000001E3 4C89E2              <1>  mov rdx, r12
-    35 000001E6 4981E4000000F0      <1>  and r12, %2
-    35          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
-    35          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
-    36 000001ED 49C1EC3C            <1>  shr r12, 64 - %3
-    37 000001F1 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
-    38 000001F8 4D01E3              <1>  add r11, r12
-    39 000001FB 418A03              <1>  mov al, byte [r11]
-    40 000001FE 48C1E204            <1>  shl rdx, %3
-    41 00000202 4989D4              <1>  mov r12, rdx
-    42 00000205 4188C6              <1>  mov SYMBOL, al
-    43                              <1>  WRITE_TO_BUFFER 0
-    75 00000208 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <2> 
-    77                              <2>  %if %1
-    78                              <2>  inc FMT_ADR
-    79                              <2>  %endif
-    80 0000020F 49FFC7              <2>  inc BUF_POS
-    81 00000212 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
-    82 00000216 7525                <2>  jne %%NO_FLUSH
-    83                              <2>  FLUSH_BUF
-    56 00000218 52                  <3>  push rdx
-    57 00000219 51                  <3>  push rcx
-    58 0000021A B801000000          <3>  mov rax, 0x01
-    59 0000021F BF01000000          <3>  mov rdi, 1
-    60 00000224 48BE-               <3>  mov rsi, Buffer
-    60 00000226 [0000000000000000]  <3>
-    61 0000022E BA40000000          <3>  mov rdx, BUF_SIZE
-    62 00000233 0F05                <3>  syscall
-    63 00000235 41BF00000000        <3>  mov BUF_POS, 0
-    64 0000023B 59                  <3>  pop rcx
-    65 0000023C 5A                  <3>  pop rdx
-    84                              <2>  %%NO_FLUSH
-    84          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <2> 
-    44 0000023D E2A4                <1>  loop %%GET_DIGIT
-    45 0000023F 5A                  <1>  pop rdx
-    46 00000240 59                  <1>  pop rcx
-    47 00000241 58                  <1>  pop rax
-   161 00000242 E9CC000000                      jmp .switch_end
-   162                                  
-   163                                  .oct_parse:
-   164                                          WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22   ; TODO: fix this
-    19 00000247 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
-    20 0000024C 4D89F4              <1>  mov r12, r14
-    21 0000024F 50                  <1>  push rax
-    22 00000250 51                  <1>  push rcx
-    23 00000251 52                  <1>  push rdx
-    24                              <1> 
+    26                              <1> 
+    27 000001DA 49C1E420            <1>  shl r12, 32
+    28                              <1> 
+    29                              <1>  %if %1 == 8
+    30                              <1>  shr r12, 1
+    31                              <1>  %endif
+    32                              <1> 
+    33 000001DE B908000000          <1>  mov rcx, %4 / 2
+    34                              <1>  %%GET_DIGIT:
+    35 000001E3 4C89E2              <1>  mov rdx, r12
+    36 000001E6 4981E4000000F0      <1>  and r12, %2
+    36          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
+    36          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
+    37 000001ED 49C1EC3C            <1>  shr r12, 64 - %3
+    38 000001F1 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
+    39 000001F8 4D01E3              <1>  add r11, r12
+    40 000001FB 418A03              <1>  mov al, byte [r11]
+    41 000001FE 48C1E204            <1>  shl rdx, %3
+    42 00000202 4989D4              <1>  mov r12, rdx
+    43 00000205 4188C6              <1>  mov SYMBOL, al
+    44                              <1>  WRITE_TO_BUFFER 0
+    78 00000208 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <2> 
+    80                              <2>  %if %1
+    81                              <2>  inc FMT_ADR
+    82                              <2>  %endif
+    83 0000020F 49FFC7              <2>  inc BUF_POS
+    84 00000212 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
+    85 00000216 7525                <2>  jne %%NO_FLUSH
+    86                              <2>  FLUSH_BUF_COM
+    58 00000218 52                  <3>  push rdx
+    59 00000219 51                  <3>  push rcx
+    60 0000021A B801000000          <3>  mov rax, 0x01
+    61 0000021F BF01000000          <3>  mov rdi, 1
+    62 00000224 48BE-               <3>  mov rsi, %1
+    62 00000226 [0000000000000000]  <3>
+    63                              <3> 
+    64 0000022E BA40000000          <3>  mov rdx, %2
+    65 00000233 0F05                <3>  syscall
+    66 00000235 41BF00000000        <3>  mov BUF_POS, 0
+    67 0000023B 59                  <3>  pop rcx
+    68 0000023C 5A                  <3>  pop rdx
+    87                              <2>  %%NO_FLUSH
+    87          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <2> 
+    45 0000023D E2A4                <1>  loop %%GET_DIGIT
+    46 0000023F 5A                  <1>  pop rdx
+    47 00000240 59                  <1>  pop rcx
+    48 00000241 58                  <1>  pop rax
+   183 00000242 E9D3000000                      jmp .switch_end
+   184                                  
+   185                                  .oct_parse:
+   186                                          WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22
+    20 00000247 4E8B74ED00          <1>  mov r14, [rbp + CUR_ARG * 8]
+    21 0000024C 4D89F4              <1>  mov r12, r14
+    22 0000024F 50                  <1>  push rax
+    23 00000250 51                  <1>  push rcx
+    24 00000251 52                  <1>  push rdx
     25                              <1> 
-    26 00000252 49C1E420            <1>  shl r12, 32
-    27                              <1> 
-    28                              <1>  %if %1 == 8
-    29 00000256 49D1EC              <1>  shr r12, 1
-    30                              <1>  %endif
-    31                              <1> 
-    32 00000259 B90B000000          <1>  mov rcx, %4 / 2
-    33                              <1>  %%GET_DIGIT:
-    34 0000025E 4C89E2              <1>  mov rdx, r12
-    35 00000261 4981E4000000E0      <1>  and r12, %2
-    35          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
-    35          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
-    36 00000268 49C1EC3D            <1>  shr r12, 64 - %3
-    37 0000026C 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
-    38 00000273 4D01E3              <1>  add r11, r12
-    39 00000276 418A03              <1>  mov al, byte [r11]
-    40 00000279 48C1E203            <1>  shl rdx, %3
-    41 0000027D 4989D4              <1>  mov r12, rdx
-    42 00000280 4188C6              <1>  mov SYMBOL, al
-    43                              <1>  WRITE_TO_BUFFER 0
-    75 00000283 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <2> 
-    77                              <2>  %if %1
-    78                              <2>  inc FMT_ADR
-    79                              <2>  %endif
-    80 0000028A 49FFC7              <2>  inc BUF_POS
-    81 0000028D 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
-    82 00000291 7525                <2>  jne %%NO_FLUSH
-    83                              <2>  FLUSH_BUF
-    56 00000293 52                  <3>  push rdx
-    57 00000294 51                  <3>  push rcx
-    58 00000295 B801000000          <3>  mov rax, 0x01
-    59 0000029A BF01000000          <3>  mov rdi, 1
-    60 0000029F 48BE-               <3>  mov rsi, Buffer
-    60 000002A1 [0000000000000000]  <3>
-    61 000002A9 BA40000000          <3>  mov rdx, BUF_SIZE
-    62 000002AE 0F05                <3>  syscall
-    63 000002B0 41BF00000000        <3>  mov BUF_POS, 0
-    64 000002B6 59                  <3>  pop rcx
-    65 000002B7 5A                  <3>  pop rdx
-    84                              <2>  %%NO_FLUSH
-    84          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <2> 
-    44 000002B8 E2A4                <1>  loop %%GET_DIGIT
-    45 000002BA 5A                  <1>  pop rdx
-    46 000002BB 59                  <1>  pop rcx
-    47 000002BC 58                  <1>  pop rax
-   165 000002BD EB54                            jmp .switch_end
-   166                                  
-   167                                  .dec_parse:
-   168 000002BF E8CE000000                      call parse_dec
-   169 000002C4 EB4D                            jmp .switch_end
-   170                                  
-   171                                  .chr_parse:
-   172 000002C6 E889000000                      call parse_char
-   173 000002CB EB46                            jmp .switch_end
-   174                                  
-   175                                  .perc_parse:
-   176                                          WRITE_TO_BUFFER 1
-    75 000002CD 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <1> 
-    77                              <1>  %if %1
-    78 000002D4 48FFC3              <1>  inc FMT_ADR
-    79                              <1>  %endif
-    80 000002D7 49FFC7              <1>  inc BUF_POS
-    81 000002DA 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
-    82 000002DE 7525                <1>  jne %%NO_FLUSH
-    83                              <1>  FLUSH_BUF
-    56 000002E0 52                  <2>  push rdx
-    57 000002E1 51                  <2>  push rcx
-    58 000002E2 B801000000          <2>  mov rax, 0x01
-    59 000002E7 BF01000000          <2>  mov rdi, 1
-    60 000002EC 48BE-               <2>  mov rsi, Buffer
-    60 000002EE [0000000000000000]  <2>
-    61 000002F6 BA40000000          <2>  mov rdx, BUF_SIZE
-    62 000002FB 0F05                <2>  syscall
-    63 000002FD 41BF00000000        <2>  mov BUF_POS, 0
-    64 00000303 59                  <2>  pop rcx
-    65 00000304 5A                  <2>  pop rdx
-    84                              <1>  %%NO_FLUSH
-    84          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <1> 
-   177 00000305 E914FDFFFF                      jmp .parse_char
-   178                                  
-   179                                  .wrong_symbol:
-   180 0000030A 49C7C2FFFFFFFF                  mov r10, -1
-   181 00000311 EB0B                            jmp .end_of_parse
-   182                                  
-   183                                  .switch_end:
-   184 00000313 49FFC5                          inc CUR_ARG
-   185 00000316 48FFC3                          inc FMT_ADR
-   186 00000319 E900FDFFFF                      jmp .parse_char
-   187                                  
-   188                                  .end_of_parse
-   188          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
-   189                                          FLUSH_BUF
-    56 0000031E 52                  <1>  push rdx
-    57 0000031F 51                  <1>  push rcx
-    58 00000320 B801000000          <1>  mov rax, 0x01
-    59 00000325 BF01000000          <1>  mov rdi, 1
-    60 0000032A 48BE-               <1>  mov rsi, Buffer
-    60 0000032C [0000000000000000]  <1>
-    61 00000334 BA40000000          <1>  mov rdx, BUF_SIZE
-    62 00000339 0F05                <1>  syscall
-    63 0000033B 41BF00000000        <1>  mov BUF_POS, 0
-    64 00000341 59                  <1>  pop rcx
-    65 00000342 5A                  <1>  pop rdx
-   190                                  
-   191 00000343 4889EC                          mov rsp, rbp
-   192 00000346 5D                              pop rbp
-   193 00000347 488B1C24                        mov rbx, [rsp]
-   194 0000034B 4C89D0                          mov rax, r10            ; return value
-   195 0000034E 4883C460                        add rsp, 6 * 16         ; restore stack
-   196 00000352 FFE3                            jmp rbx                 ; return
-   197                                  ;-------------------------------------------
-   198                                  
-   199                                  ;-------------------------------------------
-   200                                  ; Put char in
-   201                                  ;
-   202                                  ; Destr: FMT_ADR, BUF_POS
-   203                                  ;-------------------------------------------
-   204                                  parse_char:
-   205 00000354 468A74ED00                      mov SYMBOL, [rbp + CUR_ARG * 8]
-   206                                          WRITE_TO_BUFFER 1
-    75 00000359 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
-    76                              <1> 
-    77                              <1>  %if %1
-    78 00000360 48FFC3              <1>  inc FMT_ADR
-    79                              <1>  %endif
-    80 00000363 49FFC7              <1>  inc BUF_POS
-    81 00000366 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
-    82 0000036A 7525                <1>  jne %%NO_FLUSH
-    83                              <1>  FLUSH_BUF
-    56 0000036C 52                  <2>  push rdx
-    57 0000036D 51                  <2>  push rcx
-    58 0000036E B801000000          <2>  mov rax, 0x01
-    59 00000373 BF01000000          <2>  mov rdi, 1
-    60 00000378 48BE-               <2>  mov rsi, Buffer
-    60 0000037A [0000000000000000]  <2>
-    61 00000382 BA40000000          <2>  mov rdx, BUF_SIZE
-    62 00000387 0F05                <2>  syscall
-    63 00000389 41BF00000000        <2>  mov BUF_POS, 0
-    64 0000038F 59                  <2>  pop rcx
-    65 00000390 5A                  <2>  pop rdx
-    84                              <1>  %%NO_FLUSH
-    84          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
-    85                              <1> 
-   207 00000391 C3                              ret
+    26                              <1> 
+    27 00000252 49C1E420            <1>  shl r12, 32
+    28                              <1> 
+    29                              <1>  %if %1 == 8
+    30 00000256 49D1EC              <1>  shr r12, 1
+    31                              <1>  %endif
+    32                              <1> 
+    33 00000259 B90B000000          <1>  mov rcx, %4 / 2
+    34                              <1>  %%GET_DIGIT:
+    35 0000025E 4C89E2              <1>  mov rdx, r12
+    36 00000261 4981E4000000E0      <1>  and r12, %2
+    36          ******************  <1>  warning: signed dword immediate exceeds bounds [-w+number-overflow]
+    36          ******************  <1>  warning: dword data exceeds bounds [-w+number-overflow]
+    37 00000268 49C1EC3D            <1>  shr r12, 64 - %3
+    38 0000026C 4C8D1D(00000000)    <1>  lea r11, [rel HEX_TO_ASCCI_ARR]
+    39 00000273 4D01E3              <1>  add r11, r12
+    40 00000276 418A03              <1>  mov al, byte [r11]
+    41 00000279 48C1E203            <1>  shl rdx, %3
+    42 0000027D 4989D4              <1>  mov r12, rdx
+    43 00000280 4188C6              <1>  mov SYMBOL, al
+    44                              <1>  WRITE_TO_BUFFER 0
+    78 00000283 4588B7[00000000]    <2>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <2> 
+    80                              <2>  %if %1
+    81                              <2>  inc FMT_ADR
+    82                              <2>  %endif
+    83 0000028A 49FFC7              <2>  inc BUF_POS
+    84 0000028D 4983FF3F            <2>  cmp BUF_POS, BUF_SIZE - 1
+    85 00000291 7525                <2>  jne %%NO_FLUSH
+    86                              <2>  FLUSH_BUF_COM
+    58 00000293 52                  <3>  push rdx
+    59 00000294 51                  <3>  push rcx
+    60 00000295 B801000000          <3>  mov rax, 0x01
+    61 0000029A BF01000000          <3>  mov rdi, 1
+    62 0000029F 48BE-               <3>  mov rsi, %1
+    62 000002A1 [0000000000000000]  <3>
+    63                              <3> 
+    64 000002A9 BA40000000          <3>  mov rdx, %2
+    65 000002AE 0F05                <3>  syscall
+    66 000002B0 41BF00000000        <3>  mov BUF_POS, 0
+    67 000002B6 59                  <3>  pop rcx
+    68 000002B7 5A                  <3>  pop rdx
+    87                              <2>  %%NO_FLUSH
+    87          ******************  <2>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <2> 
+    45 000002B8 E2A4                <1>  loop %%GET_DIGIT
+    46 000002BA 5A                  <1>  pop rdx
+    47 000002BB 59                  <1>  pop rcx
+    48 000002BC 58                  <1>  pop rax
+   187 000002BD EB5B                            jmp .switch_end
+   188                                  
+   189                                  .str_parse:
+   190 000002BF E8E8000000                      call parse_string
+   191 000002C4 EB54                            jmp .switch_end
+   192                                  
+   193                                  .dec_parse:
+   194 000002C6 E8CE000000                      call parse_dec
+   195 000002CB EB4D                            jmp .switch_end
+   196                                  
+   197                                  .chr_parse:
+   198 000002CD E889000000                      call parse_char
+   199 000002D2 EB46                            jmp .switch_end
+   200                                  
+   201                                  .perc_parse:
+   202                                          WRITE_TO_BUFFER 1
+    78 000002D4 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <1> 
+    80                              <1>  %if %1
+    81 000002DB 48FFC3              <1>  inc FMT_ADR
+    82                              <1>  %endif
+    83 000002DE 49FFC7              <1>  inc BUF_POS
+    84 000002E1 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
+    85 000002E5 7525                <1>  jne %%NO_FLUSH
+    86                              <1>  FLUSH_BUF_COM
+    58 000002E7 52                  <2>  push rdx
+    59 000002E8 51                  <2>  push rcx
+    60 000002E9 B801000000          <2>  mov rax, 0x01
+    61 000002EE BF01000000          <2>  mov rdi, 1
+    62 000002F3 48BE-               <2>  mov rsi, %1
+    62 000002F5 [0000000000000000]  <2>
+    63                              <2> 
+    64 000002FD BA40000000          <2>  mov rdx, %2
+    65 00000302 0F05                <2>  syscall
+    66 00000304 41BF00000000        <2>  mov BUF_POS, 0
+    67 0000030A 59                  <2>  pop rcx
+    68 0000030B 5A                  <2>  pop rdx
+    87                              <1>  %%NO_FLUSH
+    87          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <1> 
+   203 0000030C E90DFDFFFF                      jmp .parse_char
+   204                                  
+   205                                  .wrong_symbol:
+   206 00000311 49C7C2FFFFFFFF                  mov r10, -1
+   207 00000318 EB0B                            jmp .end_of_parse
    208                                  
-   209                                  
-   210                                  parse_dec:
-   211 00000392 468A74ED00                      mov SYMBOL, [rbp + CUR_ARG * 8]
-   212 00000397 4588B7[00000000]                mov byte [Buffer + BUF_POS], SYMBOL
-   213 0000039E 49FFC7                          inc BUF_POS
-   214 000003A1 48FFC3                          inc rbx
-   215 000003A4 C3                              ret
+   209                                  .switch_end:
+   210 0000031A 49FFC5                          inc CUR_ARG
+   211 0000031D 48FFC3                          inc FMT_ADR
+   212 00000320 E9F9FCFFFF                      jmp .parse_char
+   213                                  
+   214                                  .end_of_parse
+   214          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   215                                          FLUSH_BUF_COM
+    58 00000325 52                  <1>  push rdx
+    59 00000326 51                  <1>  push rcx
+    60 00000327 B801000000          <1>  mov rax, 0x01
+    61 0000032C BF01000000          <1>  mov rdi, 1
+    62 00000331 48BE-               <1>  mov rsi, %1
+    62 00000333 [0000000000000000]  <1>
+    63                              <1> 
+    64 0000033B BA40000000          <1>  mov rdx, %2
+    65 00000340 0F05                <1>  syscall
+    66 00000342 41BF00000000        <1>  mov BUF_POS, 0
+    67 00000348 59                  <1>  pop rcx
+    68 00000349 5A                  <1>  pop rdx
    216                                  
-   217                                  section     .bss
-   218                                  
-   219 00000000 <res 40h>               Buffer:     resb BUF_SIZE
-   220                                  
-   221                                  section     .data
-   222                                  
-   223                                  HEX_TO_ASCCI_ARR:
-   224 00000000 303132333435363738-         db '0123456789ABCDEF'
-   224 00000009 39414243444546     
+   217 0000034A 4889EC                          mov rsp, rbp
+   218 0000034D 5D                              pop rbp
+   219 0000034E 488B1C24                        mov rbx, [rsp]
+   220 00000352 4C89D0                          mov rax, r10            ; return value
+   221 00000355 4883C460                        add rsp, 6 * 16         ; restore stack
+   222 00000359 FFE3                            jmp rbx                 ; return
+   223                                  ;-------------------------------------------
+   224                                  
+   225                                  ;-------------------------------------------
+   226                                  ; Put char in
+   227                                  ;
+   228                                  ; Destr: FMT_ADR, BUF_POS
+   229                                  ;-------------------------------------------
+   230                                  parse_char:
+   231 0000035B 468A74ED00                      mov SYMBOL, [rbp + CUR_ARG * 8]
+   232                                          WRITE_TO_BUFFER 1
+    78 00000360 4588B7[00000000]    <1>  mov byte [Buffer + BUF_POS], SYMBOL
+    79                              <1> 
+    80                              <1>  %if %1
+    81 00000367 48FFC3              <1>  inc FMT_ADR
+    82                              <1>  %endif
+    83 0000036A 49FFC7              <1>  inc BUF_POS
+    84 0000036D 4983FF3F            <1>  cmp BUF_POS, BUF_SIZE - 1
+    85 00000371 7525                <1>  jne %%NO_FLUSH
+    86                              <1>  FLUSH_BUF_COM
+    58 00000373 52                  <2>  push rdx
+    59 00000374 51                  <2>  push rcx
+    60 00000375 B801000000          <2>  mov rax, 0x01
+    61 0000037A BF01000000          <2>  mov rdi, 1
+    62 0000037F 48BE-               <2>  mov rsi, %1
+    62 00000381 [0000000000000000]  <2>
+    63                              <2> 
+    64 00000389 BA40000000          <2>  mov rdx, %2
+    65 0000038E 0F05                <2>  syscall
+    66 00000390 41BF00000000        <2>  mov BUF_POS, 0
+    67 00000396 59                  <2>  pop rcx
+    68 00000397 5A                  <2>  pop rdx
+    87                              <1>  %%NO_FLUSH
+    87          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+    88                              <1> 
+   233 00000398 C3                              ret
+   234                                  
+   235                                  
+   236                                  parse_dec:
+   237 00000399 468A74ED00                      mov SYMBOL, [rbp + CUR_ARG * 8]
+   238 0000039E 4588B7[00000000]                mov byte [Buffer + BUF_POS], SYMBOL
+   239 000003A5 49FFC7                          inc BUF_POS
+   240 000003A8 48FFC3                          inc rbx
+   241 000003AB C3                              ret
+   242                                  
+   243                                  parse_string:
+   244 000003AC 4E8B74ED00                      mov r14, [rbp + CUR_ARG * 8]    ; save in r14 addr of string
+   245 000003B1 4C89F7                          mov rdi, r14
+   246                                          my_strlen
+    97 000003B4 4831C9              <1>  xor rcx, rcx
+    98                              <1> %%loop:
+    99 000003B7 803F00              <1>  cmp byte [rdi], 0
+   100 000003BA 7408                <1>  je %%done
+   101 000003BC 48FFC7              <1>  inc rdi
+   102 000003BF 48FFC1              <1>  inc rcx
+   103 000003C2 EBF3                <1>  jmp %%loop
+   104                              <1>  %%done
+   104          ******************  <1>  warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   247 000003C4 4881F980000000                  cmp rcx, BUF_SIZE * 2
+   248 000003CB 7241                            jb .copy_to_buf
+   249                                          FLUSH_BUF_COM               ; flush buf
+    58 000003CD 52                  <1>  push rdx
+    59 000003CE 51                  <1>  push rcx
+    60 000003CF B801000000          <1>  mov rax, 0x01
+    61 000003D4 BF01000000          <1>  mov rdi, 1
+    62 000003D9 48BE-               <1>  mov rsi, %1
+    62 000003DB [0000000000000000]  <1>
+    63                              <1> 
+    64 000003E3 BA40000000          <1>  mov rdx, %2
+    65 000003E8 0F05                <1>  syscall
+    66 000003EA 41BF00000000        <1>  mov BUF_POS, 0
+    67 000003F0 59                  <1>  pop rcx
+    68 000003F1 5A                  <1>  pop rdx
+   250                                          FLUSH_BUF r14, rcx
+    58 000003F2 52                  <1>  push rdx
+    59 000003F3 51                  <1>  push rcx
+    60 000003F4 B801000000          <1>  mov rax, 0x01
+    61 000003F9 BF01000000          <1>  mov rdi, 1
+    62 000003FE 4C89F6              <1>  mov rsi, %1
+    63                              <1> 
+    64 00000401 4889CA              <1>  mov rdx, %2
+    65 00000404 0F05                <1>  syscall
+    66 00000406 41BF00000000        <1>  mov BUF_POS, 0
+    67 0000040C 59                  <1>  pop rcx
+    68 0000040D 5A                  <1>  pop rdx
+   251                                          .copy_to_buf
+   251          ******************       warning: label alone on a line without a colon might be in error [-w+label-orphan]
+   252                                  
+   253 0000040E C3                              ret
+   254                                  
+   255                                  section     .bss
+   256                                  
+   257 00000000 <res 40h>               Buffer:     resb BUF_SIZE
+   258                                  
+   259                                  section     .data
+   260                                  
+   261                                  HEX_TO_ASCCI_ARR:
+   262 00000000 303132333435363738-         db '0123456789ABCDEF'
+   262 00000009 39414243444546     
