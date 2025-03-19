@@ -90,6 +90,22 @@ section .text
 ;-------------------------------------------
 
 ;-------------------------------------------
+; Writes to buffer symbol
+; Args: %1 - char to write
+;
+; Destr: BUF_POS
+;-------------------------------------------
+%macro WRITE_CHAR_TO_BUFFER 1
+        mov byte [Buffer + BUF_POS], %1
+        inc BUF_POS
+        cmp BUF_POS, BUF_SIZE - 1
+        jne %%NO_FLUSH
+        FLUSH_BUF_COM
+        %%NO_FLUSH
+%endmacro
+;-------------------------------------------
+
+;-------------------------------------------
 ; Destr: rcx, rdi
 ; Ret: rcx - strlen(rdi)
 ;-------------------------------------------
@@ -175,14 +191,19 @@ my_printf:
         dq .hex_parse      ; x - hex
 
 .bin_parse:
+		WRITE_CHAR_TO_BUFFER '0'
+		WRITE_CHAR_TO_BUFFER 'b'
         WRITE_NUM_TO_BUF 2, 0x80000000, 1, 64
         jmp .switch_end
 
 .hex_parse:
+		WRITE_CHAR_TO_BUFFER '0'
+		WRITE_CHAR_TO_BUFFER 'x'
         WRITE_NUM_TO_BUF 16, 0xF0000000, 4, 16
         jmp .switch_end
 
 .oct_parse:
+		WRITE_CHAR_TO_BUFFER '0'
         WRITE_NUM_TO_BUF 8, 0xE0000000, 3, 22
         jmp .switch_end
 
@@ -234,11 +255,31 @@ parse_char:
 
 
 parse_dec:
-        mov SYMBOL, [rbp + CUR_ARG * 8]
-        mov byte [Buffer + BUF_POS], SYMBOL
-        inc BUF_POS
-        inc rbx
-        ret
+	mov r10, [rbp + CUR_ARG * 8]
+    push rax
+    push rdx
+    push rcx
+
+    mov rcx, 10             ; Максимальное количество цифр (32-битное число)
+
+    .GET_DIGIT:
+    	xor rdx, rdx            ; Очистка старшей части для 64-битного деления
+		mov rdi, 10
+        mov rax, r10        ; Загружаем число в RAX
+        div rdi             ; RAX / 10 -> Частное в RAX, Остаток (mod 10) в RDX
+
+        ; Преобразуем остаток (младшую цифру) в ASCII
+        mov r14b, [HEX_TO_ASCCI_ARR + rdx]
+        WRITE_TO_BUFFER 0      ; Отправляем символ в буфер
+
+        mov r10, rax        ; Обновляем r10 (частное)
+        test rax, rax       ; Если частное стало 0 — значит, все цифры напечатаны
+    loop .GET_DIGIT
+
+    pop rcx
+    pop rdx
+    pop rax
+    ret
 
 parse_string:
         mov r14, [rbp + CUR_ARG * 8]    ; save in r14 addr of string
