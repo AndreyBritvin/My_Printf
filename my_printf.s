@@ -7,7 +7,7 @@ section .text
 %define RET_REG r10
 %define BUF_SIZE 64
 %define FLUSH_BUF_COM FLUSH_BUF Buffer, BUF_SIZE
-
+%define WRITE_TO_BUFFER WRITE_TO_BUFFER_DIR 0,
 ;-------------------------------------------
 ; Writes to buffer from SYMBOL (full register)
 ; Args: %1 - base, 2/8/10/16
@@ -15,7 +15,7 @@ section .text
 ;       %3 - shifting       for hex/oct/bin
 ;       %4 - repeating part for hex/oct/bin
 ;
-; Destr: BUF_POS, FMT_ADR
+; Destr: BUF_POS, FMT_ADR, r8b
 ;-------------------------------------------
 %macro WRITE_NUM_TO_BUF 4
         mov r14, [rbp + CUR_ARG * 8]
@@ -23,7 +23,7 @@ section .text
     push rax
     push rcx
     push rdx
-
+    xor r8b, r8b                                  ; register to check if there some zeros
     ; mov bx, cs
     shl r12, 32                                 ; because this support only 32bit ints
 
@@ -42,8 +42,22 @@ section .text
     shl rdx, %3                                 ; delete first 4 bits and replace new value
     mov r12, rdx                                ; resave dx to bx
     mov SYMBOL, al
+
+    cmp al, '0'
+    je %%zero
+    mov r8b, 1
+    %%zero:
+    cmp r8b, 1
+    jne %%not_print
     WRITE_TO_BUFFER 0
+    %%not_print:
     loop %%GET_DIGIT
+
+    cmp r8b, 0
+    jne %%there_were_smth_printed
+    WRITE_CHAR_TO_BUFFER '0'
+    %%there_were_smth_printed:
+
     pop rdx
     pop rcx
     pop rax
@@ -77,13 +91,19 @@ section .text
 ;
 ; Destr: BUF_POS, FMT_ADR
 ;-------------------------------------------
-%macro WRITE_TO_BUFFER 1
+%macro WRITE_TO_BUFFER_DIR 2
         mov byte [Buffer + BUF_POS], SYMBOL
 
-        %if %1
-        inc FMT_ADR
+        %if %2
+            inc FMT_ADR
         %endif
-        inc BUF_POS
+
+        %if %1 == 0
+            inc BUF_POS
+        %else
+            dec BUF_POS
+        %endif
+
         inc RET_REG
         cmp BUF_POS, BUF_SIZE - 1
         jne %%NO_FLUSH
@@ -126,10 +146,13 @@ section .text
 %endmacro
 ;-------------------------------------------
 
-; TODO: make return value
-; Inverse dec digits
+; TODO:
+; + make return value
+; +Inverse dec digits
+; Make sign for dec
 ; Reduce zeros amount
-; Make serial bufferisation
+; + Make serial bufferisation
+; Make atexit
 
 global _start                  ; predefined entry point name for ld
 ; global _Z9my_printfPKcz
@@ -295,6 +318,7 @@ parse_dec:
     push rcx
 
     mov rcx, 10             ; Максимальное количество цифр (32-битное число)
+    add BUF_POS, 10        ; Смещаемся для инвертированного порядка
 
     .GET_DIGIT:
     	xor rdx, rdx            ; Очистка старшей части для 64-битного деления
@@ -304,11 +328,13 @@ parse_dec:
 
         ; Преобразуем остаток (младшую цифру) в ASCII
         mov r14b, [HEX_TO_ASCCI_ARR + rdx]
-        WRITE_TO_BUFFER 0      ; Отправляем символ в буфер
+        WRITE_TO_BUFFER_DIR 1, 0      ; Отправляем символ в буфер
 
         mov r11, rax        ; Обновляем r11 (частное)
         test rax, rax       ; Если частное стало 0 — значит, все цифры напечатаны
     loop .GET_DIGIT
+
+    add BUF_POS, 11        ; Смещаемся в конец числа + 1 - для следующего символа
 
     pop rcx
     pop rdx
