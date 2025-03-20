@@ -4,6 +4,7 @@ section .text
 %define FMT_ADR rbx
 %define SYMBOL  r14b
 %define CUR_ARG r13
+%define RET_REG r10
 %define BUF_SIZE 64
 %define FLUSH_BUF_COM FLUSH_BUF Buffer, BUF_SIZE
 
@@ -62,7 +63,9 @@ section .text
         mov rsi, %1
         ; mov rsi, Buffer
         mov rdx, %2             ; strlen (Msg)
+	    push r10
         syscall
+    	pop r10
         mov BUF_POS, 0
         pop rcx
         pop rdx
@@ -81,6 +84,7 @@ section .text
         inc FMT_ADR
         %endif
         inc BUF_POS
+        inc RET_REG
         cmp BUF_POS, BUF_SIZE - 1
         jne %%NO_FLUSH
         FLUSH_BUF_COM
@@ -98,6 +102,7 @@ section .text
 %macro WRITE_CHAR_TO_BUFFER 1
         mov byte [Buffer + BUF_POS], %1
         inc BUF_POS
+        inc RET_REG
         cmp BUF_POS, BUF_SIZE - 1
         jne %%NO_FLUSH
         FLUSH_BUF_COM
@@ -121,11 +126,38 @@ section .text
 %endmacro
 ;-------------------------------------------
 
+; TODO: make return value
+; Inverse dec digits
+; Reduce zeros amount
+; Make serial bufferisation
 
 global _start                  ; predefined entry point name for ld
 ; global _Z9my_printfPKcz
 global my_printf
+global my_flush
 
+;-------------------------------------------
+; Flushes buffer
+;
+; Destr: nothing
+;-------------------------------------------
+my_flush:
+	cmp qword [SAVED_BUF_POS], 0
+	je .no_need_flush
+	push rax
+	push rdi
+	push rsi
+	FLUSH_BUF Buffer, [SAVED_BUF_POS]
+	mov qword [SAVED_BUF_POS], 0
+	; mov rax, 0x3C      ; exit64 (rdi)
+	; xor rdi, rdi
+	; syscall
+	pop rsi
+	pop rdi
+	pop rax
+	.no_need_flush
+	ret
+;-------------------------------------------
 
 ;-------------------------------------------
 ; My printf. Arguments by fastcall, fmt in rdi (first)
@@ -146,9 +178,11 @@ my_printf:
         push rbp
         mov rbp, rsp
 
+        xor RET_REG, RET_REG
         xor FMT_ADR, FMT_ADR
         mov FMT_ADR, [rbp + 16]         ; fmt string
-        xor BUF_POS, BUF_POS            ; r15 - counter of buffer
+        ; xor BUF_POS, BUF_POS            ; r15 - counter of buffer
+        mov BUF_POS, [SAVED_BUF_POS]
         mov CUR_ARG, 3
 
 .parse_char:
@@ -180,15 +214,15 @@ my_printf:
         jmp [.jump_table + rdi * 8]
 
 .jump_table:               ; offset of functions for each of char
-        dq .bin_parse      ; b - bin
-        dq .chr_parse      ; c - char
-        dq .dec_parse      ; d - dec
-        times ('o' - 'd' - 1) dq .wrong_symbol  ; not anyone
-        dq .oct_parse      ; o - oct
-        times ('s' - 'o' - 1) dq .wrong_symbol  ; not anyone
-        dq .str_parse      ; s - str
-        times ('x' - 's' - 1) dq .wrong_symbol  ; not anyone
-        dq .hex_parse      ; x - hex
+        						dq .bin_parse      ; b - bin
+        						dq .chr_parse      ; c - char
+        						dq .dec_parse      ; d - dec
+        times ('o' - 'd' - 1) 	dq .wrong_symbol   ; not anyone
+        						dq .oct_parse      ; o - oct
+        times ('s' - 'o' - 1) 	dq .wrong_symbol   ; not anyone
+        						dq .str_parse      ; s - str
+        times ('x' - 's' - 1)	dq .wrong_symbol   ; not anyone
+        						dq .hex_parse      ; x - hex
 
 .bin_parse:
 		WRITE_CHAR_TO_BUFFER '0'
@@ -224,7 +258,7 @@ my_printf:
         jmp .parse_char
 
 .wrong_symbol:
-        mov r10, -1
+        mov RET_REG, -1
         jmp .end_of_parse
 
 .switch_end:
@@ -233,14 +267,14 @@ my_printf:
         jmp .parse_char
 
 .end_of_parse
-        FLUSH_BUF_COM
 
         mov rsp, rbp
         pop rbp
         mov rbx, [rsp]
-        mov rax, r10            ; return value
-        add rsp, 6 * 16         ; restore stack
-        jmp rbx                 ; return
+		mov [SAVED_BUF_POS], BUF_POS
+        add rsp, 8 * 7         ; restore stack
+        mov rax, RET_REG        ; return value
+	jmp rbx                 ; return
 ;-------------------------------------------
 
 ;-------------------------------------------
@@ -255,7 +289,7 @@ parse_char:
 
 
 parse_dec:
-	mov r10, [rbp + CUR_ARG * 8]
+	mov r11, [rbp + CUR_ARG * 8]
     push rax
     push rdx
     push rcx
@@ -265,14 +299,14 @@ parse_dec:
     .GET_DIGIT:
     	xor rdx, rdx            ; Очистка старшей части для 64-битного деления
 		mov rdi, 10
-        mov rax, r10        ; Загружаем число в RAX
+        mov rax, r11        ; Загружаем число в RAX
         div rdi             ; RAX / 10 -> Частное в RAX, Остаток (mod 10) в RDX
 
         ; Преобразуем остаток (младшую цифру) в ASCII
         mov r14b, [HEX_TO_ASCCI_ARR + rdx]
         WRITE_TO_BUFFER 0      ; Отправляем символ в буфер
 
-        mov r10, rax        ; Обновляем r10 (частное)
+        mov r11, rax        ; Обновляем r11 (частное)
         test rax, rax       ; Если частное стало 0 — значит, все цифры напечатаны
     loop .GET_DIGIT
 
@@ -305,5 +339,6 @@ Buffer:     resb BUF_SIZE
 
 section     .data
 
+SAVED_BUF_POS dq 0
 HEX_TO_ASCCI_ARR:
     db '0123456789ABCDEF'
