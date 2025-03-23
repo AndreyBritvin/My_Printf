@@ -106,7 +106,7 @@ section .text
 
         inc RET_REG
         cmp BUF_POS, BUF_SIZE - 1
-        jne %%NO_FLUSH
+        jb %%NO_FLUSH
         FLUSH_BUF_COM
         %%NO_FLUSH
 
@@ -402,12 +402,23 @@ parse_string:
         mov r14, [rbp + CUR_ARG * 8]    ; save in r14 addr of string
         mov rdi, r14
         my_strlen
-        cmp rcx, BUF_SIZE * 2
+        cmp rcx, BUF_SIZE
         jb .copy_to_buf
         FLUSH_BUF_COM               ; flush buf
         FLUSH_BUF r14, rcx
         jmp .end
         .copy_to_buf
+
+        add BUF_POS, rcx
+        cmp BUF_POS, BUF_SIZE
+        jb .NO_NEED_TO_FLUSH
+        sub BUF_POS, rcx
+        FLUSH_BUF_COM
+        jmp .END_FLUSH
+        .NO_NEED_TO_FLUSH:
+        sub BUF_POS, rcx
+        .END_FLUSH:
+
         mov rdi, BUF_POS
         mov rsi, r14
         add rdi, Buffer

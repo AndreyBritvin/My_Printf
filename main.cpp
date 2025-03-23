@@ -17,7 +17,7 @@ int main()
     int test_var = 12345;
     int ret_val2 = my_printf("Hello world\n");
     int ret_val  = my_printf("Oaoaoa %d   \n%s    %c  %% %c  %x   %x   %b   %o   %x    %x   %x \n",
-                     12345, "ILS", 'f',  's', 'c', 'a', 'a', 'a', 777, 888, 999);
+                     12345, "ILSVVVVMILSVVVVMILSVVVVMILSVVVVMILSVVVVMILSVVVVMILSVVVVMILSVVVM", 'f',  's', 'c', 'a', 'a', 'a', 777, 888, 999);
     my_flush();
     int sec_val = my_printf("Ret val = %d\n", ret_val);
     my_printf("Ret val = %d\n", sec_val);
