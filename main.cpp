@@ -7,12 +7,13 @@ extern "C" void my_flush();
 void flush_exit()
 {
     my_flush();
-    exit(0);
+    // exit(0);
+    return;
 }
 
 int main()
 {
-
+    atexit(flush_exit);
     int test_var = 12345;
     int ret_val2 = my_printf("Hello world\n");
     int ret_val  = my_printf("Oaoaoa %d   \n%s    %c  %% %c  %x   %x   %b   %o   %x    %x   %x \n",
@@ -24,7 +25,7 @@ int main()
     my_flush();
     int res = my_printf("%o\n%d %s %x %d%%%c%b\n%d %s %x %d%%%c%b\n", -1, -1, "love", 3802, 100, 33, 127,
                                                                          -1, "love", 3802, 100, 33, 127);
-
+    // my_flush();
     return my_printf("%d\n", res) <= 0;
 
     // atexit(flush_exit);

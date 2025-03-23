@@ -131,6 +131,24 @@ section .text
 ;-------------------------------------------
 
 ;-------------------------------------------
+; Writes to ... from SYMBOL
+; Args: %1 - addr of buffer
+;       %2 - direction. 1 = reverse
+;
+; Destr: BUF_POS
+;-------------------------------------------
+%macro WRITE_TO__DIR 2
+        mov byte [%1 + BUF_POS], SYMBOL
+
+        %if %2 == 0
+            inc BUF_POS
+        %else
+            dec BUF_POS
+        %endif
+%endmacro
+;-------------------------------------------
+
+;-------------------------------------------
 ; Destr: rcx, rdi
 ; Ret: rcx - strlen(rdi)
 ;-------------------------------------------
@@ -149,10 +167,10 @@ section .text
 ; TODO:
 ; + make return value
 ; +Inverse dec digits
-; Make sign for dec
-; Reduce zeros amount
+; +Make sign for dec
+; +Reduce zeros amount
 ; + Make serial bufferisation
-; Make atexit
+; +Make atexit
 
 global _start                  ; predefined entry point name for ld
 ; global _Z9my_printfPKcz
@@ -170,11 +188,13 @@ my_flush:
 	push rax
 	push rdi
 	push rsi
+    push r15
 	FLUSH_BUF Buffer, [SAVED_BUF_POS]
 	mov qword [SAVED_BUF_POS], 0
 	; mov rax, 0x3C      ; exit64 (rdi)
 	; xor rdi, rdi
 	; syscall
+    pop r15
 	pop rsi
 	pop rdi
 	pop rax
@@ -307,7 +327,7 @@ my_printf:
 ;-------------------------------------------
 parse_char:
         mov SYMBOL, [rbp + CUR_ARG * 8]
-        WRITE_TO_BUFFER 1
+        WRITE_TO_BUFFER 0
         ret
 
 
@@ -317,8 +337,17 @@ parse_dec:
     push rdx
     push rcx
 
+    test r11d, r11d
+    jns .POSITIVE
+    WRITE_CHAR_TO_BUFFER '-'
+    neg r11d
+    .POSITIVE
+
+    push BUF_POS
+    xor BUF_POS, BUF_POS
+    add BUF_POS, 10 - 1         ; Смещаемся для инвертированного порядка
+
     mov rcx, 10             ; Максимальное количество цифр (32-битное число)
-    add BUF_POS, 10        ; Смещаемся для инвертированного порядка
 
     .GET_DIGIT:
     	xor rdx, rdx            ; Очистка старшей части для 64-битного деления
@@ -327,14 +356,42 @@ parse_dec:
         div rdi             ; RAX / 10 -> Частное в RAX, Остаток (mod 10) в RDX
 
         ; Преобразуем остаток (младшую цифру) в ASCII
-        mov r14b, [HEX_TO_ASCCI_ARR + rdx]
-        WRITE_TO_BUFFER_DIR 1, 0      ; Отправляем символ в буфер
+        mov SYMBOL, [HEX_TO_ASCCI_ARR + rdx]
+        WRITE_TO__DIR DEC_BUF, 1      ; Отправляем символ в буфер
 
         mov r11, rax        ; Обновляем r11 (частное)
-        test rax, rax       ; Если частное стало 0 — значит, все цифры напечатаны
     loop .GET_DIGIT
 
-    add BUF_POS, 11        ; Смещаемся в конец числа + 1 - для следующего символа
+    pop BUF_POS
+
+    mov rcx, 10
+    xor rdx, rdx
+    .SEE_DIGIT:
+    cmp byte [rdx + DEC_BUF], '0'
+    jne .END_SEE_DIGIT
+    inc rdx
+    loop .SEE_DIGIT
+    .END_SEE_DIGIT:
+
+    add BUF_POS, rdx
+    cmp BUF_POS, BUF_SIZE
+    jb .NO_NEED_TO_FLUSH
+    sub BUF_POS, rdx
+    FLUSH_BUF_COM
+    jmp .END_FLUSH
+    .NO_NEED_TO_FLUSH:
+    sub BUF_POS, rdx
+    .END_FLUSH:
+
+
+    mov rdi, BUF_POS
+    add rdi, Buffer
+
+    mov rsi, DEC_BUF
+    add rsi, rdx
+
+    add BUF_POS, rcx
+    rep movsb
 
     pop rcx
     pop rdx
@@ -362,6 +419,7 @@ parse_string:
 section     .bss
 
 Buffer:     resb BUF_SIZE
+DEC_BUF:    resb 10         ; Максимальное количество цифр (32-битное число)
 
 section     .data
 
